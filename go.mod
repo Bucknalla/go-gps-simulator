@@ -1,6 +1,6 @@
 module go-gps-simulator
 
-go 1.24.4
+go 1.23
 
 require (
 	github.com/creack/goselect v0.1.2 // indirect

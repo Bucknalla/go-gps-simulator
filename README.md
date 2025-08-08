@@ -45,17 +45,20 @@ Run the simulator with default settings (San Francisco coordinates):
 ./gps-simulator [options]
 ```
 
-| Flag          | Type     | Default   | Description                                            |
-| ------------- | -------- | --------- | ------------------------------------------------------ |
-| `-lat`        | float    | 37.7749   | Initial latitude in decimal degrees                    |
-| `-lon`        | float    | -122.4194 | Initial longitude in decimal degrees                   |
-| `-radius`     | float    | 100.0     | Wandering radius in meters                             |
-| `-jitter`     | float    | 0.5       | GPS jitter factor (0.0=stable, 1.0=high jitter)        |
-| `-satellites` | int      | 8         | Number of satellites to simulate (4-12)                |
-| `-lock-time`  | duration | 30s       | Time to GPS lock simulation                            |
-| `-rate`       | duration | 1s        | NMEA output rate                                       |
-| `-serial`     | string   | ""        | Serial port for NMEA output (e.g., /dev/ttyUSB0, COM1) |
-| `-baud`       | int      | 9600      | Serial port baud rate                                  |
+| Flag               | Type     | Default   | Description                                              |
+| ------------------ | -------- | --------- | -------------------------------------------------------- |
+| `-lat`             | float    | 37.7749   | Initial latitude in decimal degrees                      |
+| `-lon`             | float    | -122.4194 | Initial longitude in decimal degrees                     |
+| `-radius`          | float    | 100.0     | Wandering radius in meters                               |
+| `-altitude`        | float    | 45.0      | Starting altitude in meters                              |
+| `-jitter`          | float    | 0.5       | GPS position jitter factor (0.0=stable, 1.0=high jitter) |
+| `-altitude-jitter` | float    | 0.1       | Altitude jitter factor (0.0=stable, 1.0=high variation)  |
+| `-satellites`      | int      | 8         | Number of satellites to simulate (4-12)                  |
+| `-lock-time`       | duration | 30s       | Time to GPS lock simulation                              |
+| `-rate`            | duration | 1s        | NMEA output rate                                         |
+| `-serial`          | string   | ""        | Serial port for NMEA output (e.g., /dev/ttyUSB0, COM1)   |
+| `-baud`            | int      | 9600      | Serial port baud rate                                    |
+| `-quiet`           | bool     | false     | Suppress informational messages (only output NMEA data)  |
 
 ### Examples
 
@@ -103,6 +106,26 @@ High jitter, unstable positioning
 ./gps-simulator -jitter 0.9 -radius 200
 ```
 
+#### Altitude Examples
+
+Aircraft altitude simulation
+
+```bash
+./gps-simulator -altitude 10000 -altitude-jitter 0.2
+```
+
+Mountain hiking simulation
+
+```bash
+./gps-simulator -lat 46.8182 -lon 8.2275 -altitude 2500 -altitude-jitter 0.1
+```
+
+Stable sea-level operation
+
+```bash
+./gps-simulator -altitude 5 -altitude-jitter 0.0
+```
+
 #### Serial Port Output Examples
 
 Output to serial port (Linux/macOS)
@@ -141,6 +164,26 @@ Pipe NMEA data to another program
 
 ```bash
 ./gps-simulator | your_gps_application
+```
+
+#### Quiet Mode Examples
+
+Clean NMEA output without informational messages
+
+```bash
+./gps-simulator -quiet
+```
+
+Quiet mode with file output
+
+```bash
+./gps-simulator -quiet > clean_nmea.txt
+```
+
+Quiet mode for piping to applications
+
+```bash
+./gps-simulator -quiet -rate 100ms | nmea_parser
 ```
 
 #### Live GPS Stream Viewing
@@ -185,35 +228,6 @@ The simulator outputs the following NMEA0183 sentence types:
 - **GSA**: GPS DOP and Active Satellites
 - **GSV**: GPS Satellites in View (multiple sentences for all satellites)
 
-## Sample Output
-
-### Before GPS Lock (Example)
-
-```bash
-Starting GPS simulator...
-Initial position: 37.774900, -122.419400
-Wandering radius: 100.0 meters
-Satellites: 8
-Time to lock: 30s
-Output rate: 1s
-
-Press Ctrl+C to stop
-
-$GPGGA,214530,,,,,0,00,,,,,,,,,*65
-$GPRMC,214530,V,,,,,,,,,301224,,,N*71
-```
-
-### After GPS Lock (Example)
-
-```bash
-GPS LOCKED after 30.001s
-$GPGGA,214600,3746.4940,N,12225.1640,W,1,08,1.2,45.0,M,0.0,M,,*4A
-$GPRMC,214600,A,3746.4940,N,12225.1640,W,0.1,0.0,301224,,,A*5C
-$GPGSA,A,3,01,02,03,04,05,06,07,08,,,,2.1,1.2,1.8*3F
-$GPGSV,2,1,08,01,45,120,35,02,67,045,42,03,23,234,28,04,56,180,38*7E
-$GPGSV,2,2,08,05,34,090,31,06,78,315,45,07,12,270,25,08,89,060,48*7C
-```
-
 ## Technical Details
 
 ### Position Simulation
@@ -225,6 +239,16 @@ $GPGSV,2,2,08,05,34,090,31,06,78,315,45,07,12,270,25,08,89,060,48*7C
   - **High jitter (0.8-1.0)**: Unstable, jittery positioning with large variations
 - Automatically keeps positions within the specified radius
 - Maintains realistic coordinate precision
+
+### Altitude Simulation
+
+- Configurable starting altitude with realistic variation
+- Separate altitude jitter control independent of position jitter:
+  - **Low altitude jitter (0.0-0.2)**: Stable altitude with minimal variation
+  - **Medium altitude jitter (0.3-0.7)**: Moderate altitude changes simulating aircraft or terrain following
+  - **High altitude jitter (0.8-1.0)**: Large altitude variations for testing edge cases
+- Automatic bounds checking to prevent unrealistic altitudes
+- Dynamic altitude values reflected in NMEA GGA sentences
 
 ### Satellite Simulation
 
@@ -259,18 +283,6 @@ $GPGSV,2,2,08,05,34,090,31,06,78,315,45,07,12,270,25,08,89,060,48*7C
 - Timestamps on all messages
 - Works with real serial devices too
 - Handles cleanup automatically
-
-### Adding New Features
-
-The codebase is structured for easy extension:
-
-- Add new NMEA sentence types in `nmea.go`
-- Modify simulation behavior in `simulator.go`
-- Add new CLI options in `main.go`
-
-## License
-
-This project is open source. Feel free to use, modify, and distribute.
 
 ## Feature Roadmap
 
@@ -347,5 +359,4 @@ This project is open source. Feel free to use, modify, and distribute.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit issues, feature requests, or pull requests. If you'd like to work on any of the features listed in the roadmap above, please open an issue first to discuss the implementation approach.
-# Test change for dev version
+Contributions are welcome! Please feel free to submit issues, feature requests, or pull requests.

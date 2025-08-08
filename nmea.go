@@ -45,7 +45,7 @@ func (s *GPSSimulator) generateGGA(timestamp time.Time) string {
 	quality := "1"
 	numSats := fmt.Sprintf("%02d", len(s.satellites))
 	hdop := "1.2"      // Horizontal dilution of precision
-	altitude := "45.0" // Altitude above mean sea level
+	altitude := fmt.Sprintf("%.1f", s.currentAlt) // Current altitude above mean sea level
 	altUnit := "M"
 	geoidSep := "0.0" // Geoidal separation
 	sepUnit := "M"

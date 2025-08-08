@@ -13,6 +13,7 @@ type GPSSimulator struct {
 	config     Config
 	currentLat float64
 	currentLon float64
+	currentAlt float64
 	isLocked   bool
 	lockTime   time.Time
 	startTime  time.Time
@@ -32,6 +33,7 @@ func NewGPSSimulator(config Config, nmeaWriter io.Writer) *GPSSimulator {
 		config:     config,
 		currentLat: config.Latitude,
 		currentLon: config.Longitude,
+		currentAlt: config.Altitude,
 		isLocked:   false,
 		startTime:  time.Now(),
 		lockTime:   time.Now().Add(config.TimeToLock),
@@ -73,12 +75,15 @@ func (s *GPSSimulator) update() {
 	// Check if GPS should be locked
 	if !s.isLocked && now.After(s.lockTime) {
 		s.isLocked = true
-		fmt.Fprintf(os.Stderr, "GPS LOCKED after %v\n", now.Sub(s.startTime))
+		if !s.config.Quiet {
+			fmt.Fprintf(os.Stderr, "GPS LOCKED after %v\n", now.Sub(s.startTime))
+		}
 	}
 
 	// Update position if locked
 	if s.isLocked {
 		s.updatePosition()
+		s.updateAltitude()
 	}
 
 	// Update satellites
@@ -147,6 +152,37 @@ func (s *GPSSimulator) updatePosition() {
 		pullback := 0.1 + (rand.Float64() * 0.2) // 10-30% pullback
 		s.currentLat += (centerLat - s.currentLat) * pullback
 		s.currentLon += (centerLon - s.currentLon) * pullback
+	}
+}
+
+func (s *GPSSimulator) updateAltitude() {
+	// Apply altitude jitter based on configuration
+	if s.config.AltitudeJitter > 0 {
+		// Calculate maximum altitude change per update
+		// Low jitter = small changes; High jitter = large changes
+		maxChange := 1.0 + (s.config.AltitudeJitter * 20.0) // 1-21 meters max change
+
+		// Generate random altitude change
+		change := (rand.Float64() - 0.5) * 2 * maxChange // -maxChange to +maxChange
+
+		// Apply change
+		newAltitude := s.currentAlt + change
+
+		// Keep altitude within reasonable bounds (prevent negative or extreme altitudes)
+		minAltitude := s.config.Altitude - 100.0 // Allow 100m below starting altitude
+		maxAltitude := s.config.Altitude + 500.0 // Allow 500m above starting altitude
+
+		if minAltitude < -50.0 {
+			minAltitude = -50.0 // Don't go too far below sea level
+		}
+
+		if newAltitude < minAltitude {
+			newAltitude = minAltitude
+		} else if newAltitude > maxAltitude {
+			newAltitude = maxAltitude
+		}
+
+		s.currentAlt = newAltitude
 	}
 }
 

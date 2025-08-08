@@ -1,1 +1,4 @@
 *.txt
+go-gps-simulator
+*.out
+*.html
