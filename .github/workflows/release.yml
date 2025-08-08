@@ -1,0 +1,186 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.23
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run tests
+        run: go test -v ./...
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+          - goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+          - goos: windows
+            goarch: amd64
+            suffix: windows-amd64
+            extension: .exe
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.23
+
+      - name: Get version info
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            # For workflow_dispatch, use the current tag or commit
+            TAG=$(git describe --tags --exact-match 2>/dev/null || echo "")
+            if [ -n "$TAG" ]; then
+              echo "tag=$TAG" >> $GITHUB_OUTPUT
+            else
+              echo "tag=v$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+            fi
+          fi
+          echo "commit=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          BINARY_NAME="go-gps-simulator-${{ matrix.suffix }}${{ matrix.extension }}"
+          LDFLAGS="-s -w -X main.Version=${{ steps.version.outputs.tag }} -X main.Commit=${{ steps.version.outputs.commit }} -X main.BuildDate=${{ steps.version.outputs.build_date }}"
+
+          echo "Building ${BINARY_NAME} for ${GOOS}/${GOARCH}"
+          go build -ldflags "${LDFLAGS}" -o "${BINARY_NAME}" .
+
+          # Create checksums
+          if command -v sha256sum > /dev/null; then
+            sha256sum "${BINARY_NAME}" > "${BINARY_NAME}.sha256"
+          else
+            shasum -a 256 "${BINARY_NAME}" > "${BINARY_NAME}.sha256"
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-gps-simulator-${{ matrix.suffix }}
+          path: |
+            go-gps-simulator-${{ matrix.suffix }}${{ matrix.extension }}
+            go-gps-simulator-${{ matrix.suffix }}${{ matrix.extension }}.sha256
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+          merge-multiple: true
+
+      - name: Get version info
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+            echo "version=$(echo '${{ github.event.release.tag_name }}' | sed 's/^v//')" >> $GITHUB_OUTPUT
+            echo "release_id=${{ github.event.release.id }}" >> $GITHUB_OUTPUT
+          else
+            # For workflow_dispatch, use the current tag or commit
+            TAG=$(git describe --tags --exact-match 2>/dev/null || echo "")
+            if [ -n "$TAG" ]; then
+              echo "tag=$TAG" >> $GITHUB_OUTPUT
+              echo "version=$(echo '$TAG' | sed 's/^v//')" >> $GITHUB_OUTPUT
+            else
+              SHORT_SHA=$(git rev-parse --short HEAD)
+              echo "tag=v$SHORT_SHA" >> $GITHUB_OUTPUT
+              echo "version=$SHORT_SHA" >> $GITHUB_OUTPUT
+            fi
+            echo "release_id=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release (for workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Release ${{ steps.version.outputs.tag }}
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.tag, '-') }}
+          generate_release_notes: true
+          body: |
+            ## GPS NMEA0183 Simulator ${{ steps.version.outputs.version }}
+
+            Cross-platform GPS simulator that outputs NMEA sentences with configurable parameters.
+
+            ### Installation
+
+            Download the appropriate binary for your platform:
+            - **Linux (x64)**: `go-gps-simulator-linux-amd64`
+            - **Linux (ARM64)**: `go-gps-simulator-linux-arm64`
+            - **macOS (Intel)**: `go-gps-simulator-darwin-amd64`
+            - **macOS (Apple Silicon)**: `go-gps-simulator-darwin-arm64`
+            - **Windows (x64)**: `go-gps-simulator-windows-amd64.exe`
+
+            Make the binary executable (Linux/macOS):
+            ```bash
+            chmod +x go-gps-simulator-*
+            ```
+
+            ### Usage
+            ```bash
+            ./go-gps-simulator --help
+            ```
+
+            ### Verification
+            SHA256 checksums are provided for each binary to verify integrity.
+          files: |
+            ./artifacts/*
+
+      - name: Upload assets to existing release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          files: |
+            ./artifacts/*
