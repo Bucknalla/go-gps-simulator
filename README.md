@@ -24,7 +24,7 @@ A Go-based command-line tool that simulates a GPS receiver outputting NMEA0183 s
 ### Build from Source
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Bucknalla/go-gps-simulator.git
 cd go-gps-simulator
 go build -o gps-simulator
 ```
