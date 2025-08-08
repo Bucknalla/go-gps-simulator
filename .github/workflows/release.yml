@@ -162,6 +162,12 @@ jobs:
             - **macOS (Apple Silicon)**: `go-gps-simulator-darwin-arm64`
             - **Windows (x64)**: `go-gps-simulator-windows-amd64.exe`
 
+            #### macOS Users
+            If you get a "cannot be opened because the developer cannot be verified" error:
+            1. **Right-click** the binary and select **"Open"**
+            2. Click **"Open"** in the security dialog
+            3. Or run: `xattr -d com.apple.quarantine go-gps-simulator-darwin-*`
+
             Make the binary executable (Linux/macOS):
             ```bash
             chmod +x go-gps-simulator-*
