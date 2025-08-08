@@ -1,0 +1,125 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"time"
+
+	"go.bug.st/serial"
+)
+
+// Version information - populated at build time via ldflags
+var (
+	Version   = "dev"      // Will be set to git tag if available, otherwise "dev"
+	Commit    = "unknown"  // Will be set to git commit hash
+	BuildDate = "unknown"  // Will be set to build timestamp
+)
+
+type Config struct {
+	Latitude   float64
+	Longitude  float64
+	Radius     float64 // in meters
+	Jitter     float64 // GPS jitter factor (0.0-1.0)
+	Satellites int
+	TimeToLock time.Duration
+	OutputRate time.Duration
+	SerialPort string // Serial port device (e.g., /dev/ttyUSB0, COM1)
+	BaudRate   int    // Serial baud rate
+}
+
+func main() {
+	var config Config
+	var showVersion bool
+
+	// Define command line flags
+	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
+	flag.Float64Var(&config.Latitude, "lat", 37.7749, "Initial latitude (decimal degrees)")
+	flag.Float64Var(&config.Longitude, "lon", -122.4194, "Initial longitude (decimal degrees)")
+	flag.Float64Var(&config.Radius, "radius", 100.0, "Wandering radius in meters")
+	flag.Float64Var(&config.Jitter, "jitter", 0.5, "GPS jitter factor (0.0=stable, 1.0=high jitter)")
+	flag.IntVar(&config.Satellites, "satellites", 8, "Number of satellites to simulate (4-12)")
+	flag.DurationVar(&config.TimeToLock, "lock-time", 30*time.Second, "Time to GPS lock simulation")
+	flag.DurationVar(&config.OutputRate, "rate", 1*time.Second, "NMEA output rate")
+	flag.StringVar(&config.SerialPort, "serial", "", "Serial port for NMEA output (e.g., /dev/ttyUSB0, COM1)")
+	flag.IntVar(&config.BaudRate, "baud", 9600, "Serial port baud rate")
+
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\nGPS NMEA0183 Simulator\n")
+		fmt.Fprintf(os.Stderr, "Simulates a GPS receiver outputting NMEA sentences with configurable parameters.\n\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		flag.PrintDefaults()
+	}
+
+	flag.Parse()
+
+	// Handle version flag
+	if showVersion {
+		fmt.Printf("go-gps-simulator %s\n", Version)
+		fmt.Printf("Commit: %s\n", Commit)
+		fmt.Printf("Built: %s\n", BuildDate)
+		os.Exit(0)
+	}
+
+	// Validate input parameters
+	if config.Satellites < 4 || config.Satellites > 12 {
+		log.Fatal("Number of satellites must be between 4 and 12")
+	}
+
+	if config.Radius < 0 {
+		log.Fatal("Radius must be positive")
+	}
+
+	if config.Jitter < 0.0 || config.Jitter > 1.0 {
+		log.Fatal("Jitter must be between 0.0 and 1.0")
+	}
+
+	if config.BaudRate <= 0 {
+		log.Fatal("Baud rate must be positive")
+	}
+
+	// Setup output writer (serial port or stdout)
+	var nmeaWriter io.Writer = os.Stdout
+	var serialPort serial.Port
+
+	if config.SerialPort != "" {
+		mode := &serial.Mode{
+			BaudRate: config.BaudRate,
+			Parity:   serial.NoParity,
+			DataBits: 8,
+			StopBits: serial.OneStopBit,
+		}
+
+		var err error
+		serialPort, err = serial.Open(config.SerialPort, mode)
+		if err != nil {
+			log.Fatalf("Failed to open serial port %s: %v", config.SerialPort, err)
+		}
+		defer serialPort.Close()
+		nmeaWriter = serialPort
+
+		fmt.Fprintf(os.Stderr, "Opened serial port: %s at %d baud\n", config.SerialPort, config.BaudRate)
+	}
+
+	// Log to stderr so it doesn't interfere with NMEA output
+	fmt.Fprintf(os.Stderr, "Starting GPS simulator...\n")
+	fmt.Fprintf(os.Stderr, "Initial position: %.6f, %.6f\n", config.Latitude, config.Longitude)
+	fmt.Fprintf(os.Stderr, "Wandering radius: %.1f meters\n", config.Radius)
+	fmt.Fprintf(os.Stderr, "GPS jitter: %.1f (%.0f%% jitter)\n", config.Jitter, config.Jitter*100)
+	fmt.Fprintf(os.Stderr, "Satellites: %d\n", config.Satellites)
+	fmt.Fprintf(os.Stderr, "Time to lock: %v\n", config.TimeToLock)
+	fmt.Fprintf(os.Stderr, "Output rate: %v\n", config.OutputRate)
+	if config.SerialPort != "" {
+		fmt.Fprintf(os.Stderr, "NMEA output: %s (%d baud)\n", config.SerialPort, config.BaudRate)
+	} else {
+		fmt.Fprintf(os.Stderr, "NMEA output: stdout\n")
+	}
+	fmt.Fprintf(os.Stderr, "\nPress Ctrl+C to stop\n\n")
+
+	// Start GPS simulation
+	simulator := NewGPSSimulator(config, nmeaWriter)
+	simulator.Run()
+}
