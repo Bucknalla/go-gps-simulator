@@ -13,21 +13,24 @@ import (
 
 // Version information - populated at build time via ldflags
 var (
-	Version   = "dev"      // Will be set to git tag if available, otherwise "dev"
-	Commit    = "unknown"  // Will be set to git commit hash
-	BuildDate = "unknown"  // Will be set to build timestamp
+	Version   = "dev"     // Will be set to git tag if available, otherwise "dev"
+	Commit    = "unknown" // Will be set to git commit hash
+	BuildDate = "unknown" // Will be set to build timestamp
 )
 
 type Config struct {
-	Latitude   float64
-	Longitude  float64
-	Radius     float64 // in meters
-	Jitter     float64 // GPS jitter factor (0.0-1.0)
-	Satellites int
-	TimeToLock time.Duration
-	OutputRate time.Duration
-	SerialPort string // Serial port device (e.g., /dev/ttyUSB0, COM1)
-	BaudRate   int    // Serial baud rate
+	Latitude       float64
+	Longitude      float64
+	Radius         float64 // in meters
+	Altitude       float64 // starting altitude in meters
+	Jitter         float64 // GPS jitter factor (0.0-1.0)
+	AltitudeJitter float64 // altitude jitter factor (0.0-1.0)
+	Satellites     int
+	TimeToLock     time.Duration
+	OutputRate     time.Duration
+	SerialPort     string // Serial port device (e.g., /dev/ttyUSB0, COM1)
+	BaudRate       int    // Serial baud rate
+	Quiet          bool   // Suppress informational messages
 }
 
 func main() {
@@ -39,12 +42,15 @@ func main() {
 	flag.Float64Var(&config.Latitude, "lat", 37.7749, "Initial latitude (decimal degrees)")
 	flag.Float64Var(&config.Longitude, "lon", -122.4194, "Initial longitude (decimal degrees)")
 	flag.Float64Var(&config.Radius, "radius", 100.0, "Wandering radius in meters")
-	flag.Float64Var(&config.Jitter, "jitter", 0.5, "GPS jitter factor (0.0=stable, 1.0=high jitter)")
+	flag.Float64Var(&config.Altitude, "altitude", 45.0, "Starting altitude in meters")
+	flag.Float64Var(&config.Jitter, "jitter", 0.5, "GPS position jitter factor (0.0=stable, 1.0=high jitter)")
+	flag.Float64Var(&config.AltitudeJitter, "altitude-jitter", 0.1, "Altitude jitter factor (0.0=stable, 1.0=high variation)")
 	flag.IntVar(&config.Satellites, "satellites", 8, "Number of satellites to simulate (4-12)")
 	flag.DurationVar(&config.TimeToLock, "lock-time", 30*time.Second, "Time to GPS lock simulation")
 	flag.DurationVar(&config.OutputRate, "rate", 1*time.Second, "NMEA output rate")
 	flag.StringVar(&config.SerialPort, "serial", "", "Serial port for NMEA output (e.g., /dev/ttyUSB0, COM1)")
 	flag.IntVar(&config.BaudRate, "baud", 9600, "Serial port baud rate")
+	flag.BoolVar(&config.Quiet, "quiet", false, "Suppress info messages (only output NMEA data)")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n", os.Args[0])
@@ -58,9 +64,11 @@ func main() {
 
 	// Handle version flag
 	if showVersion {
-		fmt.Printf("go-gps-simulator %s\n", Version)
-		fmt.Printf("Commit: %s\n", Commit)
-		fmt.Printf("Built: %s\n", BuildDate)
+		if Version != "dev" {
+			fmt.Printf("go-gps-simulator %s\n", Version)
+		} else {
+			fmt.Printf("go-gps-simulator %s\n", Commit)
+		}
 		os.Exit(0)
 	}
 
@@ -75,6 +83,10 @@ func main() {
 
 	if config.Jitter < 0.0 || config.Jitter > 1.0 {
 		log.Fatal("Jitter must be between 0.0 and 1.0")
+	}
+
+	if config.AltitudeJitter < 0.0 || config.AltitudeJitter > 1.0 {
+		log.Fatal("Altitude jitter must be between 0.0 and 1.0")
 	}
 
 	if config.BaudRate <= 0 {
@@ -101,23 +113,28 @@ func main() {
 		defer serialPort.Close()
 		nmeaWriter = serialPort
 
-		fmt.Fprintf(os.Stderr, "Opened serial port: %s at %d baud\n", config.SerialPort, config.BaudRate)
+		if !config.Quiet {
+			fmt.Fprintf(os.Stderr, "Opened serial port: %s at %d baud\n", config.SerialPort, config.BaudRate)
+		}
 	}
 
 	// Log to stderr so it doesn't interfere with NMEA output
-	fmt.Fprintf(os.Stderr, "Starting GPS simulator...\n")
-	fmt.Fprintf(os.Stderr, "Initial position: %.6f, %.6f\n", config.Latitude, config.Longitude)
-	fmt.Fprintf(os.Stderr, "Wandering radius: %.1f meters\n", config.Radius)
-	fmt.Fprintf(os.Stderr, "GPS jitter: %.1f (%.0f%% jitter)\n", config.Jitter, config.Jitter*100)
-	fmt.Fprintf(os.Stderr, "Satellites: %d\n", config.Satellites)
-	fmt.Fprintf(os.Stderr, "Time to lock: %v\n", config.TimeToLock)
-	fmt.Fprintf(os.Stderr, "Output rate: %v\n", config.OutputRate)
-	if config.SerialPort != "" {
-		fmt.Fprintf(os.Stderr, "NMEA output: %s (%d baud)\n", config.SerialPort, config.BaudRate)
-	} else {
-		fmt.Fprintf(os.Stderr, "NMEA output: stdout\n")
+	if !config.Quiet {
+		fmt.Fprintf(os.Stderr, "Starting GPS simulator...\n")
+		fmt.Fprintf(os.Stderr, "Initial position: %.6f, %.6f, %.1fm\n", config.Latitude, config.Longitude, config.Altitude)
+		fmt.Fprintf(os.Stderr, "Wandering radius: %.1f meters\n", config.Radius)
+		fmt.Fprintf(os.Stderr, "GPS jitter: %.1f (%.0f%% jitter)\n", config.Jitter, config.Jitter*100)
+		fmt.Fprintf(os.Stderr, "Altitude jitter: %.1f (%.0f%% variation)\n", config.AltitudeJitter, config.AltitudeJitter*100)
+		fmt.Fprintf(os.Stderr, "Satellites: %d\n", config.Satellites)
+		fmt.Fprintf(os.Stderr, "Time to lock: %v\n", config.TimeToLock)
+		fmt.Fprintf(os.Stderr, "Output rate: %v\n", config.OutputRate)
+		if config.SerialPort != "" {
+			fmt.Fprintf(os.Stderr, "NMEA output: %s (%d baud)\n", config.SerialPort, config.BaudRate)
+		} else {
+			fmt.Fprintf(os.Stderr, "NMEA output: stdout\n")
+		}
+		fmt.Fprintf(os.Stderr, "\nPress Ctrl+C to stop\n\n")
 	}
-	fmt.Fprintf(os.Stderr, "\nPress Ctrl+C to stop\n\n")
 
 	// Start GPS simulation
 	simulator := NewGPSSimulator(config, nmeaWriter)

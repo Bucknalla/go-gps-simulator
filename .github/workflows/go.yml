@@ -1,4 +1,4 @@
-name: Verify, Build, and Vet Golang
+name: Verify, Build, Vet and Test Golang
 
 on:
     push:
@@ -31,3 +31,7 @@ jobs:
       -
         name: Run go vet
         run: go vet ./...
+
+      -
+        name: Run go test
+        run: go test ./...
