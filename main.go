@@ -30,9 +30,12 @@ type Config struct {
 	Satellites     int
 	TimeToLock     time.Duration
 	OutputRate     time.Duration
-	SerialPort     string // Serial port device (e.g., /dev/ttyUSB0, COM1)
-	BaudRate       int    // Serial baud rate
-	Quiet          bool   // Suppress informational messages
+	SerialPort     string        // Serial port device (e.g., /dev/ttyUSB0, COM1)
+	BaudRate       int           // Serial baud rate
+	Quiet          bool          // Suppress informational messages
+	GPXEnabled     bool          // Enable GPX file generation with timestamp filename
+	GPXFile        string        // Generated GPX filename (internal use)
+	Duration       time.Duration // How long to run the simulation (0 = run indefinitely)
 }
 
 func main() {
@@ -55,6 +58,8 @@ func main() {
 	flag.StringVar(&config.SerialPort, "serial", "", "Serial port for NMEA output (e.g., /dev/ttyUSB0, COM1)")
 	flag.IntVar(&config.BaudRate, "baud", 9600, "Serial port baud rate")
 	flag.BoolVar(&config.Quiet, "quiet", false, "Suppress info messages (only output NMEA data)")
+	flag.BoolVar(&config.GPXEnabled, "gpx", false, "Generate GPX track file with timestamp-based filename")
+	flag.DurationVar(&config.Duration, "duration", 0, "How long to run the simulation (e.g., 30s, 5m, 1h). Default is indefinite")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n", os.Args[0])
@@ -105,6 +110,12 @@ func main() {
 		log.Fatal("Course must be between 0.0 and 359.9 degrees")
 	}
 
+	// Handle GPX filename generation
+	if config.GPXEnabled {
+		// Always generate timestamp-based filename when -gpx flag is used
+		config.GPXFile = fmt.Sprintf("%s.gpx", time.Now().Format("20060102_150405"))
+	}
+
 	// Setup output writer (serial port or stdout)
 	var nmeaWriter io.Writer = os.Stdout
 	var serialPort serial.Port
@@ -151,6 +162,15 @@ func main() {
 	}
 
 	// Start GPS simulation
-	simulator := NewGPSSimulator(config, nmeaWriter)
+	simulator, err := NewGPSSimulator(config, nmeaWriter)
+	if err != nil {
+		log.Fatalf("Failed to create GPS simulator: %v", err)
+	}
+
+	// Show GPX file info if enabled
+	if config.GPXEnabled && !config.Quiet {
+		fmt.Fprintf(os.Stderr, "GPX output: %s\n", config.GPXFile)
+	}
+
 	simulator.Run()
 }
