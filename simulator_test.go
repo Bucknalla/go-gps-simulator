@@ -2409,3 +2409,74 @@ func TestUpdateReplayPositionWithSequentialTimestamps(t *testing.T) {
 		}
 	})
 }
+
+func TestReplaySpeedLessThanOne(t *testing.T) {
+	// Test replay speeds less than 1.0 to ensure no division by zero panic
+	tempFile := "test_slow_replay.gpx"
+	defer os.Remove(tempFile)
+
+	gpxContent := `<?xml version="1.0"?>
+<gpx version="1.0" creator="test" xmlns="http://www.topografix.com/GPX/1/0">
+  <rte>
+    <name>Test Route</name>
+    <rtept lat="42.430950" lon="-71.107628">
+      <ele>23.5</ele>
+      <time>2001-11-28T21:05:28Z</time>
+    </rtept>
+    <rtept lat="42.431240" lon="-71.109236">
+      <ele>26.6</ele>
+      <time>2001-12-01T12:00:00Z</time>
+    </rtept>
+  </rte>
+</gpx>`
+
+	err := os.WriteFile(tempFile, []byte(gpxContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test GPX file: %v", err)
+	}
+
+	testCases := []struct {
+		name        string
+		replaySpeed float64
+	}{
+		{"Speed 0.5x", 0.5},
+		{"Speed 0.1x", 0.1},
+		{"Speed 0.25x", 0.25},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := createTestConfig()
+			config.ReplayFile = tempFile
+			config.ReplaySpeed = tc.replaySpeed
+
+			buffer := &bytes.Buffer{}
+			sim, err := NewGPSSimulator(config, buffer)
+			if err != nil {
+				t.Fatalf("Failed to create GPS simulator with replay speed %.1fx: %v", tc.replaySpeed, err)
+			}
+
+			// This should not panic
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("updateReplayPosition panicked with replay speed %.1fx: %v", tc.replaySpeed, r)
+				}
+			}()
+
+			// Simulate some time passing
+			sim.replayStartTime = time.Now().Add(-5 * time.Second)
+			sim.updateReplayPosition()
+
+			// Verify position was updated (should be at first point)
+			if sim.currentLat != 42.430950 {
+				t.Errorf("Expected lat 42.430950, got %f", sim.currentLat)
+			}
+
+			// With slow replay speed, should still be at index 0 after 5 seconds
+			if tc.replaySpeed <= 0.5 && sim.replayIndex != 0 {
+				t.Errorf("Expected replay index 0 with slow speed %.1fx after 5 seconds, got %d",
+					tc.replaySpeed, sim.replayIndex)
+			}
+		})
+	}
+}

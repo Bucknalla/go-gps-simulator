@@ -461,7 +461,7 @@ func (s *GPSSimulator) updateReplayPosition() {
 	} else {
 		// Index-based progression when timestamps are not sequential
 		// Progress through points at a steady rate (1 point per second at 1x speed)
-		pointInterval := time.Second / time.Duration(s.config.ReplaySpeed)
+		pointInterval := time.Duration(float64(time.Second) / s.config.ReplaySpeed)
 		pointsSinceStart := int(elapsedTime / pointInterval)
 		s.replayIndex = pointsSinceStart % len(s.replayPoints)
 	}
