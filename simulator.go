@@ -23,6 +23,10 @@ type GPSSimulator struct {
 	satellites     []Satellite
 	nmeaWriter     io.Writer
 	gpxWriter      *GPXWriter
+	// Replay mode fields
+	replayPoints    []TrackPoint
+	replayIndex     int
+	replayStartTime time.Time
 }
 
 type Satellite struct {
@@ -35,17 +39,35 @@ type Satellite struct {
 func NewGPSSimulator(config Config, nmeaWriter io.Writer) (*GPSSimulator, error) {
 	now := time.Now()
 	sim := &GPSSimulator{
-		config:         config,
-		currentLat:     config.Latitude,
-		currentLon:     config.Longitude,
-		currentAlt:     config.Altitude,
-		currentSpeed:   config.Speed,
-		currentCourse:  config.Course,
-		isLocked:       false,
-		startTime:      now,
-		lockTime:       now.Add(config.TimeToLock),
-		lastUpdateTime: now,
-		nmeaWriter:     nmeaWriter,
+		config:          config,
+		currentLat:      config.Latitude,
+		currentLon:      config.Longitude,
+		currentAlt:      config.Altitude,
+		currentSpeed:    config.Speed,
+		currentCourse:   config.Course,
+		isLocked:        false,
+		startTime:       now,
+		lockTime:        now.Add(config.TimeToLock),
+		lastUpdateTime:  now,
+		nmeaWriter:      nmeaWriter,
+		replayIndex:     0,
+		replayStartTime: now,
+	}
+
+	// Load GPX file for replay mode
+	if config.ReplayFile != "" {
+		points, err := ReadGPXFile(config.ReplayFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load replay file: %v", err)
+		}
+		sim.replayPoints = points
+
+		// Set initial position from first track point
+		if len(points) > 0 {
+			sim.currentLat = points[0].Lat
+			sim.currentLon = points[0].Lon
+			sim.currentAlt = points[0].Elevation
+		}
 	}
 
 	// Initialize GPX writer if GPX is enabled
@@ -154,9 +176,13 @@ func (s *GPSSimulator) update() {
 
 	// Update position if locked
 	if s.isLocked {
-		s.updateSpeedAndCourse()
-		s.updatePosition()
-		s.updateAltitude()
+		if s.config.ReplayFile != "" {
+			s.updateReplayPosition()
+		} else {
+			s.updateSpeedAndCourse()
+			s.updatePosition()
+			s.updateAltitude()
+		}
 	}
 
 	// Update satellites
@@ -320,20 +346,22 @@ func (s *GPSSimulator) updateAltitude() {
 }
 
 func (s *GPSSimulator) distanceFromCenter(lat, lon float64) float64 {
-	// Haversine formula for distance calculation
-	const R = 6371000 // Earth's radius in meters
+	return s.calculateDistance(s.config.Latitude, s.config.Longitude, lat, lon)
+}
 
-	lat1 := s.config.Latitude * math.Pi / 180
-	lat2 := lat * math.Pi / 180
-	deltaLat := (lat - s.config.Latitude) * math.Pi / 180
-	deltaLon := (lon - s.config.Longitude) * math.Pi / 180
+// hasSequentialTimestamps checks if the replay points have sequential timestamps
+func (s *GPSSimulator) hasSequentialTimestamps() bool {
+	if len(s.replayPoints) < 2 {
+		return false
+	}
 
-	a := math.Sin(deltaLat/2)*math.Sin(deltaLat/2) +
-		math.Cos(lat1)*math.Cos(lat2)*
-			math.Sin(deltaLon/2)*math.Sin(deltaLon/2)
-	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
-
-	return R * c
+	// Check if timestamps are generally increasing
+	for i := 0; i < len(s.replayPoints)-1; i++ {
+		if s.replayPoints[i+1].Time.Before(s.replayPoints[i].Time) {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *GPSSimulator) updateSatellites() {
@@ -398,4 +426,124 @@ func (s *GPSSimulator) outputNMEA() {
 	}
 
 	// No extra blank lines - NMEA sentences should be continuous
+}
+
+// updateReplayPosition updates position based on GPX replay data
+func (s *GPSSimulator) updateReplayPosition() {
+	if len(s.replayPoints) == 0 {
+		return
+	}
+
+	// Defensive check for invalid replay speed
+	if s.config.ReplaySpeed <= 0 {
+		// Log error and use default speed to prevent panic
+		fmt.Fprintf(os.Stderr, "Warning: Invalid replay speed %.2f, using default 1.0x\n", s.config.ReplaySpeed)
+		s.config.ReplaySpeed = 1.0
+	}
+
+	now := time.Now()
+	elapsedTime := now.Sub(s.replayStartTime)
+
+	// Apply replay speed multiplier
+	adjustedTime := time.Duration(float64(elapsedTime) * s.config.ReplaySpeed)
+
+	// Check if timestamps are sequential for time-based progression
+	useTimestamps := s.hasSequentialTimestamps()
+
+	if useTimestamps {
+		// Time-based progression using GPX timestamps
+		targetTime := s.replayPoints[0].Time.Add(adjustedTime)
+
+		// Find the track point that should be active at this time
+		for i := s.replayIndex; i < len(s.replayPoints)-1; i++ {
+			if targetTime.Before(s.replayPoints[i+1].Time) {
+				s.replayIndex = i
+				break
+			}
+			if i == len(s.replayPoints)-2 {
+				s.replayIndex = i + 1
+				break
+			}
+		}
+	} else {
+		// Index-based progression when timestamps are not sequential
+		// Progress through points at a steady rate (1 point per second at 1x speed)
+		pointInterval := time.Duration(float64(time.Second) / s.config.ReplaySpeed)
+		pointsSinceStart := int(elapsedTime / pointInterval)
+		s.replayIndex = pointsSinceStart % len(s.replayPoints)
+	}
+
+	// If we've reached the end, loop back to start
+	if s.replayIndex >= len(s.replayPoints) {
+		s.replayIndex = 0
+		s.replayStartTime = now
+		return
+	}
+
+	// Update current position from track point
+	currentPoint := s.replayPoints[s.replayIndex]
+	s.currentLat = currentPoint.Lat
+	s.currentLon = currentPoint.Lon
+	s.currentAlt = currentPoint.Elevation
+
+	// Calculate speed and course from next point if available
+	if s.replayIndex < len(s.replayPoints)-1 {
+		nextPoint := s.replayPoints[s.replayIndex+1]
+
+		// Calculate distance and time between points
+		distance := s.calculateDistance(s.currentLat, s.currentLon, nextPoint.Lat, nextPoint.Lon)
+
+		var timeDiff float64
+		if useTimestamps {
+			timeDiff = nextPoint.Time.Sub(currentPoint.Time).Seconds()
+		} else {
+			// Use a fixed time interval for non-sequential timestamps
+			timeDiff = 1.0 // 1 second between points
+		}
+
+		if timeDiff > 0 {
+			// Convert m/s to knots (1 m/s = 1.94384 knots)
+			s.currentSpeed = (distance / timeDiff) * 1.94384
+
+			// Calculate course (bearing) to next point
+			s.currentCourse = s.calculateBearing(s.currentLat, s.currentLon, nextPoint.Lat, nextPoint.Lon)
+		}
+	}
+}
+
+// calculateBearing calculates the bearing from point 1 to point 2
+func (s *GPSSimulator) calculateBearing(lat1, lon1, lat2, lon2 float64) float64 {
+	lat1Rad := lat1 * math.Pi / 180
+	lat2Rad := lat2 * math.Pi / 180
+	deltaLonRad := (lon2 - lon1) * math.Pi / 180
+
+	y := math.Sin(deltaLonRad) * math.Cos(lat2Rad)
+	x := math.Cos(lat1Rad)*math.Sin(lat2Rad) - math.Sin(lat1Rad)*math.Cos(lat2Rad)*math.Cos(deltaLonRad)
+
+	bearing := math.Atan2(y, x) * 180 / math.Pi
+
+	// Normalize to 0-359 degrees
+	if bearing < 0 {
+		bearing += 360
+	}
+
+	return bearing
+}
+
+// calculateDistance calculates the distance between two points using the Haversine formula
+// This is the primary implementation used by other distance calculation methods
+func (s *GPSSimulator) calculateDistance(lat1, lon1, lat2, lon2 float64) float64 {
+	const R = 6371000 // Earth's radius in meters
+
+	lat1Rad := lat1 * math.Pi / 180
+	lat2Rad := lat2 * math.Pi / 180
+	deltaLat := (lat2 - lat1) * math.Pi / 180
+	deltaLon := (lon2 - lon1) * math.Pi / 180
+
+	a := math.Sin(deltaLat/2)*math.Sin(deltaLat/2) +
+		math.Cos(lat1Rad)*math.Cos(lat2Rad)*
+			math.Sin(deltaLon/2)*math.Sin(deltaLon/2)
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+
+	return R * c
 }

@@ -17,6 +17,7 @@ Designed for testing GPS-dependent applications, embedded systems development, o
 - **Speed & Course Simulation**: Configurable static speed and course values in NMEA output
 - **Realistic Signal Simulation**: Dynamic satellite positions and signal strength
 - **GPX Track Generation**: Export GPS tracks to GPX files for analysis and visualization
+- **GPX Track Replay**: Replay existing GPX files with configurable speed multipliers
 - **Duration Control**: Automatic simulation termination after specified time periods
 
 ## Installation
@@ -78,6 +79,8 @@ gps-simulator [options]
 | `-quiet`           | bool     | false     | Suppress informational messages (only output NMEA data)  |
 | `-gpx`             | bool     | false     | Generate GPX track file with timestamp-based filename    |
 | `-duration`        | duration | 0         | How long to run the simulation (e.g., 30s, 5m, 1h)      |
+| `-replay`          | string   | ""        | GPX file to replay instead of simulating (e.g., track.gpx) |
+| `-replay-speed`    | float    | 1.0       | Replay speed multiplier (1.0=real-time, 2.0=2x speed, 0.5=half speed) |
 
 **Note**: When using `-gpx`, the `-duration` flag is required.
 
@@ -285,6 +288,38 @@ Automated testing scenario
 gps-simulator -gpx -duration 10m -quiet -lat 51.5074 -lon -0.1278 -speed 5.0
 ```
 
+#### GPX Replay Examples
+
+Replay a GPX track at real-time speed
+
+```bash
+gps-simulator -replay my_track.gpx
+```
+
+Replay at 2x speed for faster testing
+
+```bash
+gps-simulator -replay my_track.gpx -replay-speed 2.0
+```
+
+Slow motion replay at half speed
+
+```bash
+gps-simulator -replay my_track.gpx -replay-speed 0.5
+```
+
+Replay with custom output settings
+
+```bash
+gps-simulator -replay journey.gpx -rate 500ms -serial /dev/ttyUSB0 -baud 4800
+```
+
+Quiet replay for piping to applications
+
+```bash
+gps-simulator -replay track.gpx -quiet -replay-speed 5.0 | nmea_parser
+```
+
 #### Live GPS Stream Viewing
 
 Quick Demo (Everything Automatic)
@@ -385,6 +420,15 @@ The simulator outputs the following NMEA0183 sentence types:
 - **Post-GPS Lock**: Only records track points after GPS lock is achieved for accurate data
 - **Duration Required**: The `-duration` flag must be specified when using `-gpx` to ensure controlled file size
 
+### GPX Track Replay
+
+- **Standard GPX 1.1 Support**: Reads industry-standard GPX files from any GPS application or device
+- **Automatic Speed/Course Calculation**: Calculates realistic speed and course values from track point timestamps and positions
+- **Configurable Replay Speed**: Speed multipliers from 0.1x (slow motion) to 10x+ (fast forward) for testing scenarios
+- **Seamless NMEA Integration**: Replayed positions generate the same NMEA sentences as simulated data
+- **Loop Functionality**: Automatically restarts from the beginning when reaching the end of the track
+- **Time-Based Progression**: Respects original GPX timestamps for accurate replay timing
+
 ## Development
 
 ### Helper Scripts
@@ -441,8 +485,12 @@ The simulator outputs the following NMEA0183 sentence types:
   - GLONASS, Galileo, BeiDou satellites
   - Constellation-specific NMEA sentences (GLGGA, GNGGA, etc.)
   - Different satellite ID ranges
+- [x] **GPX Track Replay** - Replay existing GPX files with NMEA output
+  - Standard GPX 1.1 file format support
+  - Configurable replay speed multipliers (0.1x to 10x+)
+  - Automatic speed and course calculation from track data
+  - Seamless integration with all existing NMEA output features
 - [ ] **Predefined Routes** - Follow realistic movement patterns
-  - GPX file import for route following
   - City/highway driving patterns
   - Airport runway procedures
   - Maritime shipping lanes

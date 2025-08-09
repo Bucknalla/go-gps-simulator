@@ -36,6 +36,8 @@ type Config struct {
 	GPXEnabled     bool          // Enable GPX file generation with timestamp filename
 	GPXFile        string        // Generated GPX filename (internal use)
 	Duration       time.Duration // How long to run the simulation (0 = run indefinitely)
+	ReplayFile     string        // GPX file to replay (empty = normal simulation mode)
+	ReplaySpeed    float64       // Replay speed multiplier (1.0 = real-time, 2.0 = 2x speed, etc.)
 }
 
 func main() {
@@ -60,6 +62,8 @@ func main() {
 	flag.BoolVar(&config.Quiet, "quiet", false, "Suppress info messages (only output NMEA data)")
 	flag.BoolVar(&config.GPXEnabled, "gpx", false, "Generate GPX track file with timestamp-based filename")
 	flag.DurationVar(&config.Duration, "duration", 0, "How long to run the simulation (e.g., 30s, 5m, 1h). Default is indefinite")
+	flag.StringVar(&config.ReplayFile, "replay", "", "GPX file to replay instead of simulating (e.g., track.gpx)")
+	flag.Float64Var(&config.ReplaySpeed, "replay-speed", 1.0, "Replay speed multiplier (1.0=real-time, 2.0=2x speed, 0.5=half speed)")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n", os.Args[0])
@@ -110,6 +114,10 @@ func main() {
 		log.Fatal("Course must be between 0.0 and 359.9 degrees")
 	}
 
+	if config.ReplaySpeed <= 0.0 {
+		log.Fatal("Replay speed must be positive")
+	}
+
 	// Handle GPX filename generation and validation
 	if config.GPXEnabled {
 		// Require duration when GPX is enabled
@@ -147,13 +155,18 @@ func main() {
 
 	// Log to stderr so it doesn't interfere with NMEA output
 	if !config.Quiet {
-		fmt.Fprintf(os.Stderr, "Starting GPS simulator...\n")
-		fmt.Fprintf(os.Stderr, "Initial position: %.6f, %.6f, %.1fm\n", config.Latitude, config.Longitude, config.Altitude)
-		fmt.Fprintf(os.Stderr, "Wandering radius: %.1f meters\n", config.Radius)
-		fmt.Fprintf(os.Stderr, "GPS jitter: %.1f (%.0f%% jitter)\n", config.Jitter, config.Jitter*100)
-		fmt.Fprintf(os.Stderr, "Altitude jitter: %.1f (%.0f%% variation)\n", config.AltitudeJitter, config.AltitudeJitter*100)
-		fmt.Fprintf(os.Stderr, "Speed: %.1f knots\n", config.Speed)
-		fmt.Fprintf(os.Stderr, "Course: %.1f degrees\n", config.Course)
+		if config.ReplayFile != "" {
+			fmt.Fprintf(os.Stderr, "Starting GPS replay from: %s\n", config.ReplayFile)
+			fmt.Fprintf(os.Stderr, "Replay speed: %.1fx\n", config.ReplaySpeed)
+		} else {
+			fmt.Fprintf(os.Stderr, "Starting GPS simulator...\n")
+			fmt.Fprintf(os.Stderr, "Initial position: %.6f, %.6f, %.1fm\n", config.Latitude, config.Longitude, config.Altitude)
+			fmt.Fprintf(os.Stderr, "Wandering radius: %.1f meters\n", config.Radius)
+			fmt.Fprintf(os.Stderr, "GPS jitter: %.1f (%.0f%% jitter)\n", config.Jitter, config.Jitter*100)
+			fmt.Fprintf(os.Stderr, "Altitude jitter: %.1f (%.0f%% variation)\n", config.AltitudeJitter, config.AltitudeJitter*100)
+			fmt.Fprintf(os.Stderr, "Speed: %.1f knots\n", config.Speed)
+			fmt.Fprintf(os.Stderr, "Course: %.1f degrees\n", config.Course)
+		}
 		fmt.Fprintf(os.Stderr, "Satellites: %d\n", config.Satellites)
 		fmt.Fprintf(os.Stderr, "Time to lock: %v\n", config.TimeToLock)
 		fmt.Fprintf(os.Stderr, "Output rate: %v\n", config.OutputRate)

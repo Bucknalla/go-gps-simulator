@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/xml"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -10,8 +11,8 @@ import (
 
 func TestNewGPXWriter(t *testing.T) {
 	// Test creating a new GPX writer
-	tempFile := "test_track.gpx"
-	defer os.Remove(tempFile) // Clean up after test
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_track.gpx")
 
 	writer, err := NewGPXWriter(tempFile)
 	if err != nil {
@@ -50,8 +51,8 @@ func TestNewGPXWriterInvalidPath(t *testing.T) {
 }
 
 func TestAddTrackPoint(t *testing.T) {
-	tempFile := "test_trackpoint.gpx"
-	defer os.Remove(tempFile)
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_trackpoint.gpx")
 
 	writer, err := NewGPXWriter(tempFile)
 	if err != nil {
@@ -84,8 +85,8 @@ func TestAddTrackPoint(t *testing.T) {
 }
 
 func TestAddMultipleTrackPoints(t *testing.T) {
-	tempFile := "test_multiple_points.gpx"
-	defer os.Remove(tempFile)
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_multiple_points.gpx")
 
 	writer, err := NewGPXWriter(tempFile)
 	if err != nil {
@@ -126,8 +127,8 @@ func TestAddMultipleTrackPoints(t *testing.T) {
 }
 
 func TestGetTrackPointCount(t *testing.T) {
-	tempFile := "test_count.gpx"
-	defer os.Remove(tempFile)
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_count.gpx")
 
 	writer, err := NewGPXWriter(tempFile)
 	if err != nil {
@@ -152,8 +153,8 @@ func TestGetTrackPointCount(t *testing.T) {
 }
 
 func TestWriteToFile(t *testing.T) {
-	tempFile := "test_write.gpx"
-	defer os.Remove(tempFile)
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_write.gpx")
 
 	writer, err := NewGPXWriter(tempFile)
 	if err != nil {
@@ -219,8 +220,8 @@ func TestWriteToFile(t *testing.T) {
 }
 
 func TestXMLStructureValidity(t *testing.T) {
-	tempFile := "test_xml_validity.gpx"
-	defer os.Remove(tempFile)
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_xml_validity.gpx")
 
 	writer, err := NewGPXWriter(tempFile)
 	if err != nil {
@@ -285,8 +286,8 @@ func TestXMLStructureValidity(t *testing.T) {
 
 func TestCloseWithoutFile(t *testing.T) {
 	// Test closing a writer that was never used to write to file
-	tempFile := "test_close_empty.gpx"
-	defer os.Remove(tempFile)
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_close_empty.gpx")
 
 	writer, err := NewGPXWriter(tempFile)
 	if err != nil {
@@ -307,14 +308,14 @@ func TestCloseWithoutFile(t *testing.T) {
 
 func TestWriteToFileError(t *testing.T) {
 	// Test WriteToFile with file permission error
-	tempFile := "test_write_error.gpx"
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_write_error.gpx")
 
 	writer, err := NewGPXWriter(tempFile)
 	if err != nil {
 		t.Fatalf("Failed to create GPX writer: %v", err)
 	}
 	defer writer.Close()
-	defer os.Remove(tempFile)
 
 	// Add a track point
 	testTime := time.Date(2025, 8, 9, 12, 30, 45, 0, time.UTC)
@@ -335,13 +336,13 @@ func TestWriteToFileError(t *testing.T) {
 
 func TestCloseError(t *testing.T) {
 	// Test Close with file error
-	tempFile := "test_close_error.gpx"
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_close_error.gpx")
 
 	writer, err := NewGPXWriter(tempFile)
 	if err != nil {
 		t.Fatalf("Failed to create GPX writer: %v", err)
 	}
-	defer os.Remove(tempFile)
 
 	// Add a track point
 	testTime := time.Date(2025, 8, 9, 12, 30, 45, 0, time.UTC)
@@ -362,13 +363,13 @@ func TestCloseError(t *testing.T) {
 
 func TestCloseAlreadyClosed(t *testing.T) {
 	// Test Close when already closed
-	tempFile := "test_close_already_closed.gpx"
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_close_already_closed.gpx")
 
 	writer, err := NewGPXWriter(tempFile)
 	if err != nil {
 		t.Fatalf("Failed to create GPX writer: %v", err)
 	}
-	defer os.Remove(tempFile)
 
 	// Close once
 	err = writer.Close()
@@ -385,8 +386,8 @@ func TestCloseAlreadyClosed(t *testing.T) {
 
 func TestWriteToFileWithEmptyTrack(t *testing.T) {
 	// Test WriteToFile with no track points
-	tempFile := "test_write_empty.gpx"
-	defer os.Remove(tempFile)
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_write_empty.gpx")
 
 	writer, err := NewGPXWriter(tempFile)
 	if err != nil {
@@ -421,8 +422,8 @@ func TestWriteToFileWithEmptyTrack(t *testing.T) {
 }
 
 func TestTrackName(t *testing.T) {
-	tempFile := "test_track_name.gpx"
-	defer os.Remove(tempFile)
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_track_name.gpx")
 
 	writer, err := NewGPXWriter(tempFile)
 	if err != nil {
@@ -452,5 +453,177 @@ func TestTrackName(t *testing.T) {
 
 	if !strings.Contains(string(content), "<name>GPS Simulator Track</name>") {
 		t.Error("GPX file should contain track name")
+	}
+}
+
+// Tests for GPX replay functionality
+
+func TestReadGPXFileWithTracks(t *testing.T) {
+	// Create a test GPX file with track data
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_read_tracks.gpx")
+
+	gpxContent := `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="test" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>Test Track</name>
+    <trkseg>
+      <trkpt lat="37.774900" lon="-122.419400">
+        <ele>50.0</ele>
+        <time>2024-01-15T10:00:00Z</time>
+      </trkpt>
+      <trkpt lat="37.775000" lon="-122.419300">
+        <ele>52.0</ele>
+        <time>2024-01-15T10:00:10Z</time>
+      </trkpt>
+      <trkpt lat="37.775100" lon="-122.419200">
+        <ele>54.0</ele>
+        <time>2024-01-15T10:00:20Z</time>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>`
+
+	err := os.WriteFile(tempFile, []byte(gpxContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test GPX file: %v", err)
+	}
+
+	// Test reading the GPX file
+	points, err := ReadGPXFile(tempFile)
+	if err != nil {
+		t.Fatalf("Failed to read GPX file: %v", err)
+	}
+
+	// Verify we got the expected number of points
+	if len(points) != 3 {
+		t.Errorf("Expected 3 track points, got %d", len(points))
+	}
+
+	// Verify first point data
+	if points[0].Lat != 37.774900 {
+		t.Errorf("Expected first point lat 37.774900, got %f", points[0].Lat)
+	}
+	if points[0].Lon != -122.419400 {
+		t.Errorf("Expected first point lon -122.419400, got %f", points[0].Lon)
+	}
+	if points[0].Elevation != 50.0 {
+		t.Errorf("Expected first point elevation 50.0, got %f", points[0].Elevation)
+	}
+
+	// Verify last point data
+	if points[2].Lat != 37.775100 {
+		t.Errorf("Expected last point lat 37.775100, got %f", points[2].Lat)
+	}
+	if points[2].Elevation != 54.0 {
+		t.Errorf("Expected last point elevation 54.0, got %f", points[2].Elevation)
+	}
+}
+
+func TestReadGPXFileWithRoutes(t *testing.T) {
+	// Create a test GPX file with route data
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_read_routes.gpx")
+
+	gpxContent := `<?xml version="1.0"?>
+<gpx version="1.0" creator="test" xmlns="http://www.topografix.com/GPX/1/0">
+  <rte>
+    <name>Test Route</name>
+    <rtept lat="42.430950" lon="-71.107628">
+      <ele>23.5</ele>
+      <time>2001-06-02T00:18:15Z</time>
+    </rtept>
+    <rtept lat="42.431240" lon="-71.109236">
+      <ele>26.6</ele>
+      <time>2001-11-07T23:53:41Z</time>
+    </rtept>
+  </rte>
+</gpx>`
+
+	err := os.WriteFile(tempFile, []byte(gpxContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test GPX file: %v", err)
+	}
+
+	// Test reading the GPX file
+	points, err := ReadGPXFile(tempFile)
+	if err != nil {
+		t.Fatalf("Failed to read GPX file: %v", err)
+	}
+
+	// Verify we got the expected number of points
+	if len(points) != 2 {
+		t.Errorf("Expected 2 route points, got %d", len(points))
+	}
+
+	// Verify first point data
+	if points[0].Lat != 42.430950 {
+		t.Errorf("Expected first point lat 42.430950, got %f", points[0].Lat)
+	}
+	if points[0].Lon != -71.107628 {
+		t.Errorf("Expected first point lon -71.107628, got %f", points[0].Lon)
+	}
+	if points[0].Elevation != 23.5 {
+		t.Errorf("Expected first point elevation 23.5, got %f", points[0].Elevation)
+	}
+}
+
+func TestReadGPXFileErrors(t *testing.T) {
+	tests := []struct {
+		name        string
+		content     string
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "Non-existent file",
+			content:     "",
+			expectError: true,
+			errorMsg:    "failed to open GPX file",
+		},
+		{
+			name: "Invalid XML",
+			content: `<?xml version="1.0"?>
+<gpx><invalid</gpx>`,
+			expectError: true,
+			errorMsg:    "failed to parse GPX file",
+		},
+		{
+			name: "No track points or routes",
+			content: `<?xml version="1.0"?>
+<gpx version="1.1" creator="test" xmlns="http://www.topografix.com/GPX/1/1">
+  <wpt lat="37.7749" lon="-122.4194"><name>Test</name></wpt>
+</gpx>`,
+			expectError: true,
+			errorMsg:    "no track points or route points found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempFile := "test_error_" + strings.ReplaceAll(tt.name, " ", "_") + ".gpx"
+
+			if tt.name != "Non-existent file" {
+				err := os.WriteFile(tempFile, []byte(tt.content), 0644)
+				if err != nil {
+					t.Fatalf("Failed to write test file: %v", err)
+				}
+			} else {
+				tempFile = "non_existent_file.gpx"
+			}
+
+			_, err := ReadGPXFile(tempFile)
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error containing '%s', got nil", tt.errorMsg)
+				} else if !strings.Contains(err.Error(), tt.errorMsg) {
+					t.Errorf("Expected error containing '%s', got '%v'", tt.errorMsg, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error, got %v", err)
+				}
+			}
+		})
 	}
 }
