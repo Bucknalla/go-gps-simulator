@@ -13,7 +13,7 @@ Designed for testing GPS-dependent applications, embedded systems development, o
 - **Configurable Output Rate**: Control how frequently NMEA sentences are output
 - **Serial Port Support**: Output NMEA data directly to serial devices
 - **Output Separation**: NMEA data and logging messages are separated (stdout vs stderr)
-- **Multiple NMEA Sentence Types**: Supports GGA, RMC, GSA, VTG, and GSV sentences
+- **Multiple NMEA Sentence Types**: Supports GGA, RMC, GLL, VTG, GSA, GSV, and ZDA sentences
 - **Speed & Course Simulation**: Configurable static speed and course values in NMEA output
 - **Realistic Signal Simulation**: Dynamic satellite positions and signal strength
 - **GPX Track Generation**: Export GPS tracks to GPX files for analysis and visualization
@@ -319,13 +319,18 @@ The simulator outputs the following NMEA0183 sentence types:
 
 - **GGA**: Global Positioning System Fix Data (no fix)
 - **RMC**: Recommended Minimum (no fix)
+- **GLL**: Geographic Position - Latitude/Longitude (no fix)
+- **VTG**: Track Made Good and Ground Speed (no fix)
 
 ### After GPS Lock
 
 - **GGA**: Global Positioning System Fix Data (with position)
 - **RMC**: Recommended Minimum (with position and time)
+- **GLL**: Geographic Position - Latitude/Longitude (with position)
+- **VTG**: Track Made Good and Ground Speed (with speed/course)
 - **GSA**: GPS DOP and Active Satellites
 - **GSV**: GPS Satellites in View (multiple sentences for all satellites)
+- **ZDA**: UTC Date and Time (with precise time and date)
 
 ## Technical Details
 
