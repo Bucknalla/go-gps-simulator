@@ -346,20 +346,7 @@ func (s *GPSSimulator) updateAltitude() {
 }
 
 func (s *GPSSimulator) distanceFromCenter(lat, lon float64) float64 {
-	// Haversine formula for distance calculation
-	const R = 6371000 // Earth's radius in meters
-
-	lat1 := s.config.Latitude * math.Pi / 180
-	lat2 := lat * math.Pi / 180
-	deltaLat := (lat - s.config.Latitude) * math.Pi / 180
-	deltaLon := (lon - s.config.Longitude) * math.Pi / 180
-
-	a := math.Sin(deltaLat/2)*math.Sin(deltaLat/2) +
-		math.Cos(lat1)*math.Cos(lat2)*
-			math.Sin(deltaLon/2)*math.Sin(deltaLon/2)
-	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
-
-	return R * c
+	return s.calculateDistance(s.config.Latitude, s.config.Longitude, lat, lon)
 }
 
 // hasSequentialTimestamps checks if the replay points have sequential timestamps
@@ -537,6 +524,7 @@ func (s *GPSSimulator) calculateBearing(lat1, lon1, lat2, lon2 float64) float64 
 }
 
 // calculateDistance calculates the distance between two points using the Haversine formula
+// This is the primary implementation used by other distance calculation methods
 func (s *GPSSimulator) calculateDistance(lat1, lon1, lat2, lon2 float64) float64 {
 	const R = 6371000 // Earth's radius in meters
 
