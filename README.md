@@ -68,11 +68,11 @@ gps-simulator [options]
 | `-radius`          | float    | 100.0     | Wandering radius in meters                               |
 | `-altitude`        | float    | 45.0      | Starting altitude in meters                              |
 | `-jitter`          | float    | 0.5       | GPS position jitter factor (0.0=stable, 1.0=high jitter) |
-| `-altitude-jitter` | float    | 0.1       | Altitude jitter factor (0.0=stable, 1.0=high variation)  |
-| `-speed`           | float    | 0.1       | Static speed in knots                                    |
+| `-altitude-jitter` | float    | 0.0       | Altitude jitter factor (0.0=stable, 1.0=high variation)  |
+| `-speed`           | float    | 0.0       | Static speed in knots                                    |
 | `-course`          | float    | 0.0       | Static course in degrees (0-359)                        |
 | `-satellites`      | int      | 8         | Number of satellites to simulate (4-12)                  |
-| `-lock-time`       | duration | 30s       | Time to GPS lock simulation                              |
+| `-lock-time`       | duration | 2s        | Time to GPS lock simulation                              |
 | `-rate`            | duration | 1s        | NMEA output rate                                         |
 | `-serial`          | string   | ""        | Serial port for NMEA output (e.g., /dev/ttyUSB0, COM1)   |
 | `-baud`            | int      | 9600      | Serial port baud rate                                    |
