@@ -14,6 +14,7 @@ Designed for testing GPS-dependent applications, embedded systems development, o
 - **Serial Port Support**: Output NMEA data directly to serial devices
 - **Output Separation**: NMEA data and logging messages are separated (stdout vs stderr)
 - **Multiple NMEA Sentence Types**: Supports GGA, RMC, GSA, and GSV sentences
+- **Speed & Course Simulation**: Configurable static speed and course values in NMEA output
 - **Realistic Signal Simulation**: Dynamic satellite positions and signal strength
 
 ## Installation
@@ -64,6 +65,8 @@ gps-simulator [options]
 | `-altitude`        | float    | 45.0      | Starting altitude in meters                              |
 | `-jitter`          | float    | 0.5       | GPS position jitter factor (0.0=stable, 1.0=high jitter) |
 | `-altitude-jitter` | float    | 0.1       | Altitude jitter factor (0.0=stable, 1.0=high variation)  |
+| `-speed`           | float    | 0.1       | Static speed in knots                                    |
+| `-course`          | float    | 0.0       | Static course in degrees (0-359)                        |
 | `-satellites`      | int      | 8         | Number of satellites to simulate (4-12)                  |
 | `-lock-time`       | duration | 30s       | Time to GPS lock simulation                              |
 | `-rate`            | duration | 1s        | NMEA output rate                                         |
@@ -94,7 +97,7 @@ gps-simulator -satellites 4 -lock-time 2m -radius 200
 #### Custom location with specific parameters
 
 ```bash
-gps-simulator -lat 51.5074 -lon -0.1278 -radius 25 -satellites 10 -rate 2s
+gps-simulator -lat 51.5074 -lon -0.1278 -radius 25 -satellites 10 -rate 2s -speed 5.0 -course 180.0
 ```
 
 #### GPS Jitter Examples
@@ -135,6 +138,32 @@ Stable sea-level operation
 
 ```bash
 gps-simulator -altitude 5 -altitude-jitter 0.0
+```
+
+#### Speed and Course Examples
+
+Simulate a vessel moving east at 10 knots
+
+```bash
+gps-simulator -speed 10.0 -course 90.0
+```
+
+Aircraft simulation at 250 knots heading northwest
+
+```bash
+gps-simulator -speed 250.0 -course 315.0 -altitude 10000
+```
+
+Slow pedestrian movement northward
+
+```bash
+gps-simulator -speed 3.0 -course 0.0 -radius 25
+```
+
+Stationary GPS receiver
+
+```bash
+gps-simulator -speed 0.0 -course 0.0 -radius 5
 ```
 
 #### Serial Port Output Examples
@@ -261,6 +290,14 @@ The simulator outputs the following NMEA0183 sentence types:
 - Automatic bounds checking to prevent unrealistic altitudes
 - Dynamic altitude values reflected in NMEA GGA sentences
 
+### Speed and Course Simulation
+
+- **Static Speed Configuration**: Set constant speed in knots for consistent simulation
+- **Static Course Configuration**: Set heading in degrees (0-359) for directional simulation
+- **NMEA Integration**: Speed and course values are properly formatted in RMC sentences
+- **Realistic Values**: Supports speeds from 0 (stationary) to high-speed scenarios (aircraft, vessels)
+- **Course Precision**: Full 360-degree range with decimal precision for accurate heading simulation
+
 ### Satellite Simulation
 
 - Simulates satellite elevation (5-85 degrees above horizon)
@@ -299,14 +336,10 @@ The simulator outputs the following NMEA0183 sentence types:
 
 ### High Priority Features
 
-- [ ] **Speed & Course Simulation** - Realistic movement speed and direction changes
-  - Configurable speed (knots/mph/kmh)
-  - Dynamic course calculation based on movement
-  - Acceleration/deceleration patterns
-- [ ] **Altitude Variation** - Dynamic altitude simulation with terrain following
-  - Configurable starting altitude
-  - Altitude jitter and gradual changes
-  - Support for meters/feet units
+- [x] **Speed & Course Simulation** - Static speed and course configuration
+  - Configurable speed in knots via `-speed` flag
+  - Configurable course in degrees (0-359) via `-course` flag
+  - Properly integrated into RMC NMEA sentences
 - [ ] **Additional NMEA Sentences** - Expand sentence type support
   - VTG (Course and Speed over Ground)
   - GLL (Geographic Position - Latitude/Longitude)

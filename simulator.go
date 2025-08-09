@@ -10,15 +10,18 @@ import (
 )
 
 type GPSSimulator struct {
-	config     Config
-	currentLat float64
-	currentLon float64
-	currentAlt float64
-	isLocked   bool
-	lockTime   time.Time
-	startTime  time.Time
-	satellites []Satellite
-	nmeaWriter io.Writer
+	config         Config
+	currentLat     float64
+	currentLon     float64
+	currentAlt     float64
+	currentSpeed   float64 // Current speed with jitter applied (knots)
+	currentCourse  float64 // Current course with jitter applied (degrees)
+	isLocked       bool
+	lockTime       time.Time
+	startTime      time.Time
+	lastUpdateTime time.Time
+	satellites     []Satellite
+	nmeaWriter     io.Writer
 }
 
 type Satellite struct {
@@ -29,15 +32,19 @@ type Satellite struct {
 }
 
 func NewGPSSimulator(config Config, nmeaWriter io.Writer) *GPSSimulator {
+	now := time.Now()
 	sim := &GPSSimulator{
-		config:     config,
-		currentLat: config.Latitude,
-		currentLon: config.Longitude,
-		currentAlt: config.Altitude,
-		isLocked:   false,
-		startTime:  time.Now(),
-		lockTime:   time.Now().Add(config.TimeToLock),
-		nmeaWriter: nmeaWriter,
+		config:         config,
+		currentLat:     config.Latitude,
+		currentLon:     config.Longitude,
+		currentAlt:     config.Altitude,
+		currentSpeed:   config.Speed,
+		currentCourse:  config.Course,
+		isLocked:       false,
+		startTime:      now,
+		lockTime:       now.Add(config.TimeToLock),
+		lastUpdateTime: now,
+		nmeaWriter:     nmeaWriter,
 	}
 
 	// Initialize satellites
@@ -82,6 +89,7 @@ func (s *GPSSimulator) update() {
 
 	// Update position if locked
 	if s.isLocked {
+		s.updateSpeedAndCourse()
 		s.updatePosition()
 		s.updateAltitude()
 	}
@@ -90,69 +98,129 @@ func (s *GPSSimulator) update() {
 	s.updateSatellites()
 }
 
+func (s *GPSSimulator) updateSpeedAndCourse() {
+	// Apply jitter to speed and course based on jitter configuration
+	var speedVariation, courseVariation float64
+
+	if s.config.Jitter < 0.2 {
+		// Low jitter: minimal variation (±5% speed, ±2° course)
+		speedVariation = 0.05
+		courseVariation = 2.0
+	} else if s.config.Jitter < 0.7 {
+		// Medium jitter: moderate variation (±10-30% speed, ±5-15° course)
+		speedVariation = 0.10 + (s.config.Jitter-0.2)*0.40 // 10% to 30%
+		courseVariation = 5.0 + (s.config.Jitter-0.2)*20.0 // 5° to 15°
+	} else {
+		// High jitter: large variation (±50% speed, ±30° course)
+		speedVariation = 0.30 + (s.config.Jitter-0.7)*0.67  // 30% to 50%
+		courseVariation = 15.0 + (s.config.Jitter-0.7)*50.0 // 15° to 30°
+	}
+
+	// Apply speed variation
+	speedDelta := (rand.Float64() - 0.5) * 2 * s.config.Speed * speedVariation
+	s.currentSpeed = s.config.Speed + speedDelta
+	if s.currentSpeed < 0 {
+		s.currentSpeed = 0 // Speed cannot be negative
+	}
+
+	// Apply course variation
+	courseDelta := (rand.Float64() - 0.5) * 2 * courseVariation
+	s.currentCourse = s.config.Course + courseDelta
+
+	// Normalize course to 0-359.9 range
+	for s.currentCourse < 0 {
+		s.currentCourse += 360
+	}
+	for s.currentCourse >= 360 {
+		s.currentCourse -= 360
+	}
+}
+
 func (s *GPSSimulator) updatePosition() {
-	// Convert radius from meters to degrees (approximate)
-	radiusInDegrees := s.config.Radius / 111000.0 // rough conversion
+	now := time.Now()
+	deltaTime := now.Sub(s.lastUpdateTime).Seconds()
+	s.lastUpdateTime = now
 
-	// Calculate maximum step size based on jitter
-	// Low jitter = small, smooth steps; High jitter = large, random jumps
-	maxStepRatio := 0.01 + (s.config.Jitter * 0.3) // 1% to 31% of radius per step
-	maxStep := radiusInDegrees * maxStepRatio
-
-	var newLat, newLon float64
-
-	if s.config.Jitter < 0.1 {
-		// Very low jitter: smooth, predictable movement in small circles
-		time := float64(time.Now().UnixNano()) / 1e9 / 60.0 // slow circular motion
-		angle := time * 2 * math.Pi
-		distance := maxStep * 2 // small consistent radius
-
-		deltaLat := distance * math.Cos(angle)
-		deltaLon := distance * math.Sin(angle) / math.Cos(s.config.Latitude*math.Pi/180)
-
-		newLat = s.config.Latitude + deltaLat
-		newLon = s.config.Longitude + deltaLon
-	} else {
-		// Blend smooth movement with random jumps based on jitter
-		smoothWeight := 1.0 - s.config.Jitter
-		randomWeight := s.config.Jitter
-
-		// Smooth component: gradual drift from current position
-		smoothAngle := rand.Float64() * 2 * math.Pi
-		smoothDistance := rand.Float64() * maxStep * 0.3 // smaller smooth steps
-
-		smoothDeltaLat := smoothDistance * math.Cos(smoothAngle)
-		smoothDeltaLon := smoothDistance * math.Sin(smoothAngle) / math.Cos(s.currentLat*math.Pi/180)
-
-		// Random component: larger jumps
-		randomAngle := rand.Float64() * 2 * math.Pi
-		randomDistance := rand.Float64() * maxStep
-
-		randomDeltaLat := randomDistance * math.Cos(randomAngle)
-		randomDeltaLon := randomDistance * math.Sin(randomAngle) / math.Cos(s.config.Latitude*math.Pi/180)
-
-		// Combine smooth and random movement
-		totalDeltaLat := (smoothDeltaLat * smoothWeight) + (randomDeltaLat * randomWeight)
-		totalDeltaLon := (smoothDeltaLon * smoothWeight) + (randomDeltaLon * randomWeight)
-
-		newLat = s.currentLat + totalDeltaLat
-		newLon = s.currentLon + totalDeltaLon
+	// If no time has passed, don't update position
+	if deltaTime <= 0 {
+		return
 	}
 
-	// Ensure new position is within the specified radius from center
-	if s.distanceFromCenter(newLat, newLon) <= s.config.Radius {
-		s.currentLat = newLat
-		s.currentLon = newLon
-	} else {
-		// If outside radius, move towards center with some randomness
-		centerLat := s.config.Latitude
-		centerLon := s.config.Longitude
+	// Convert speed from knots to meters per second
+	// 1 knot = 0.514444 meters per second
+	speedMPS := s.currentSpeed * 0.514444
 
-		// Move partway back towards center
-		pullback := 0.1 + (rand.Float64() * 0.2) // 10-30% pullback
-		s.currentLat += (centerLat - s.currentLat) * pullback
-		s.currentLon += (centerLon - s.currentLon) * pullback
+	// Calculate distance traveled in this time interval
+	distanceMeters := speedMPS * deltaTime
+
+	// Convert course from degrees to radians (course is measured clockwise from north)
+	// In math, 0° is east and angles increase counter-clockwise
+	// In navigation, 0° is north and angles increase clockwise
+	// Convert navigation course to math angle: mathAngle = 90° - navCourse
+	mathAngleRad := (90.0 - s.currentCourse) * math.Pi / 180.0
+
+	// Calculate position change in meters
+	deltaEast := distanceMeters * math.Cos(mathAngleRad)  // Eastward displacement
+	deltaNorth := distanceMeters * math.Sin(mathAngleRad) // Northward displacement
+
+	// Convert meters to degrees (approximate)
+	// At the equator: 1 degree latitude ≈ 111,320 meters
+	// 1 degree longitude varies by latitude: ≈ 111,320 * cos(latitude) meters
+	deltaLatDeg := deltaNorth / 111320.0
+	deltaLonDeg := deltaEast / (111320.0 * math.Cos(s.currentLat*math.Pi/180.0))
+
+	// Calculate new position
+	newLat := s.currentLat + deltaLatDeg
+	newLon := s.currentLon + deltaLonDeg
+
+	// Apply radius constraint - if we're moving outside the configured radius,
+	// either constrain the movement or apply some random jitter to change direction
+	if s.distanceFromCenter(newLat, newLon) > s.config.Radius {
+		if s.config.Jitter > 0.5 {
+			// High jitter: add some randomness to course to "bounce" off boundaries
+			randomCourseChange := (rand.Float64() - 0.5) * 60.0 // ±30° change
+			s.currentCourse += randomCourseChange
+
+			// Normalize course
+			for s.currentCourse < 0 {
+				s.currentCourse += 360
+			}
+			for s.currentCourse >= 360 {
+				s.currentCourse -= 360
+			}
+
+			// Recalculate with new course
+			mathAngleRad = (90.0 - s.currentCourse) * math.Pi / 180.0
+			deltaEast = distanceMeters * math.Cos(mathAngleRad)
+			deltaNorth = distanceMeters * math.Sin(mathAngleRad)
+			deltaLatDeg = deltaNorth / 111320.0
+			deltaLonDeg = deltaEast / (111320.0 * math.Cos(s.currentLat*math.Pi/180.0))
+
+			newLat = s.currentLat + deltaLatDeg
+			newLon = s.currentLon + deltaLonDeg
+		} else {
+			// Low jitter: constrain to radius boundary
+			// Calculate direction from center to new position
+			centerLat := s.config.Latitude
+			centerLon := s.config.Longitude
+
+			bearing := math.Atan2(
+				(newLon-centerLon)*math.Cos(centerLat*math.Pi/180.0),
+				newLat-centerLat,
+			)
+
+			// Place new position at radius boundary in that direction
+			radiusDegLat := s.config.Radius / 111320.0
+			radiusDegLon := s.config.Radius / (111320.0 * math.Cos(centerLat*math.Pi/180.0))
+
+			newLat = centerLat + radiusDegLat*math.Cos(bearing)
+			newLon = centerLon + radiusDegLon*math.Sin(bearing)/math.Cos(centerLat*math.Pi/180.0)
+		}
 	}
+
+	// Update current position
+	s.currentLat = newLat
+	s.currentLon = newLon
 }
 
 func (s *GPSSimulator) updateAltitude() {
