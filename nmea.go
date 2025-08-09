@@ -259,7 +259,7 @@ func (s *GPSSimulator) generateNoFixGLL(timestamp time.Time) string {
 	timeStr := fmt.Sprintf("%02d%02d%02d.%02d",
 		utcTime.Hour(), utcTime.Minute(), utcTime.Second(), utcTime.Nanosecond()/10000000) // HHMMSS.SS
 
-	sentence := fmt.Sprintf("$GPGLL,,,,,,%s,V,N", timeStr) // V = Invalid, N = Not valid
+	sentence := fmt.Sprintf("$GPGLL,,,,,%s,V,N", timeStr) // V = Invalid, N = Not valid
 	return formatNMEA(sentence)
 }
 
