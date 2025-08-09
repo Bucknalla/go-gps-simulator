@@ -2256,6 +2256,7 @@ func TestUpdateReplayPosition(t *testing.T) {
 	config := createTestConfig()
 	config.ReplayFile = tempFile
 	config.ReplaySpeed = 2.0 // 2x speed
+	config.ReplayLoop = true // Enable looping for this test
 
 	buffer := &bytes.Buffer{}
 	sim, err := NewGPSSimulator(config, buffer)
