@@ -90,11 +90,12 @@ jobs:
           echo "Building ${BINARY_NAME} for ${GOOS}/${GOARCH}"
           go build -ldflags "${LDFLAGS}" -o "${BINARY_NAME}" .
 
-          # Create checksums
+          # Create checksums directory and generate checksums
+          mkdir -p checksums
           if command -v sha256sum > /dev/null; then
-            sha256sum "${BINARY_NAME}" > "${BINARY_NAME}.sha256"
+            sha256sum "${BINARY_NAME}" > "checksums/${BINARY_NAME}.sha256"
           else
-            shasum -a 256 "${BINARY_NAME}" > "${BINARY_NAME}.sha256"
+            shasum -a 256 "${BINARY_NAME}" > "checksums/${BINARY_NAME}.sha256"
           fi
 
       - name: Upload artifacts
@@ -103,7 +104,7 @@ jobs:
           name: go-gps-simulator-${{ matrix.suffix }}
           path: |
             go-gps-simulator-${{ matrix.suffix }}${{ matrix.extension }}
-            go-gps-simulator-${{ matrix.suffix }}${{ matrix.extension }}.sha256
+            checksums/
 
   release:
     needs: build

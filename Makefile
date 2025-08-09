@@ -1,7 +1,7 @@
 # Go GPS Simulator Build Configuration
 
 # Binary name
-BINARY_NAME=go-gps-simulator
+BINARY_NAME=gps-simulator
 
 # Get version information from git
 GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null)

@@ -1,6 +1,7 @@
 # GPS NMEA0183 Simulator
 
-A Go-based command-line tool that simulates a GPS receiver outputting NMEA0183 sentences. Perfect for testing GPS-dependent applications, embedded systems development, or educational purposes.
+A Go-based command-line tool that simulates a GPS receiver outputting NMEA0183 sentences.
+Designed for testing GPS-dependent applications, embedded systems development, or educational purposes.
 
 ## Features
 
@@ -17,11 +18,21 @@ A Go-based command-line tool that simulates a GPS receiver outputting NMEA0183 s
 
 ## Installation
 
-### Prerequisites
+### Download the latest release
 
-- Go 1.19 or later
+Download the appropriate binary for your platform from the [Releases](https://github.com/Bucknalla/go-gps-simulator/releases) page:
+
+- **Linux (x64)**: `go-gps-simulator-linux-amd64`
+- **Linux (ARM64)**: `go-gps-simulator-linux-arm64`
+- **macOS (Intel)**: `go-gps-simulator-darwin-amd64`
+- **macOS (Apple Silicon)**: `go-gps-simulator-darwin-arm64`
+- **Windows (x64)**: `go-gps-simulator-windows-amd64.exe`
 
 ### Build from Source
+
+#### Prerequisites
+
+- Go 1.23 or later
 
 ```bash
 git clone https://github.com/Bucknalla/go-gps-simulator.git
@@ -36,13 +47,13 @@ go build -o gps-simulator
 Run the simulator with default settings (San Francisco coordinates):
 
 ```bash
-./gps-simulator
+gps-simulator
 ```
 
 ### Command Line Options
 
 ```bash
-./gps-simulator [options]
+gps-simulator [options]
 ```
 
 | Flag               | Type     | Default   | Description                                              |
@@ -65,25 +76,25 @@ Run the simulator with default settings (San Francisco coordinates):
 #### Simulate GPS in New York City
 
 ```bash
-./gps-simulator -lat 40.7128 -lon -74.0060 -radius 50
+gps-simulator -lat 40.7128 -lon -74.0060 -radius 50
 ```
 
 #### Fast acquisition with many satellites
 
 ```bash
-./gps-simulator -satellites 12 -lock-time 5s -rate 500ms
+gps-simulator -satellites 12 -lock-time 5s -rate 500ms
 ```
 
 #### Simulate poor GPS conditions
 
 ```bash
-./gps-simulator -satellites 4 -lock-time 2m -radius 200
+gps-simulator -satellites 4 -lock-time 2m -radius 200
 ```
 
 #### Custom location with specific parameters
 
 ```bash
-./gps-simulator -lat 51.5074 -lon -0.1278 -radius 25 -satellites 10 -rate 2s
+gps-simulator -lat 51.5074 -lon -0.1278 -radius 25 -satellites 10 -rate 2s
 ```
 
 #### GPS Jitter Examples
@@ -91,19 +102,19 @@ Run the simulator with default settings (San Francisco coordinates):
 Stable, smooth positioning (low jitter)
 
 ```bash
-./gps-simulator -jitter 0.1 -radius 50
+gps-simulator -jitter 0.1 -radius 50
 ```
 
 Moderate jitter (default)
 
 ```bash
-./gps-simulator -jitter 0.5
+gps-simulator -jitter 0.5
 ```
 
 High jitter, unstable positioning
 
 ```bash
-./gps-simulator -jitter 0.9 -radius 200
+gps-simulator -jitter 0.9 -radius 200
 ```
 
 #### Altitude Examples
@@ -111,19 +122,19 @@ High jitter, unstable positioning
 Aircraft altitude simulation
 
 ```bash
-./gps-simulator -altitude 10000 -altitude-jitter 0.2
+gps-simulator -altitude 10000 -altitude-jitter 0.2
 ```
 
 Mountain hiking simulation
 
 ```bash
-./gps-simulator -lat 46.8182 -lon 8.2275 -altitude 2500 -altitude-jitter 0.1
+gps-simulator -lat 46.8182 -lon 8.2275 -altitude 2500 -altitude-jitter 0.1
 ```
 
 Stable sea-level operation
 
 ```bash
-./gps-simulator -altitude 5 -altitude-jitter 0.0
+gps-simulator -altitude 5 -altitude-jitter 0.0
 ```
 
 #### Serial Port Output Examples
@@ -131,19 +142,19 @@ Stable sea-level operation
 Output to serial port (Linux/macOS)
 
 ```bash
-./gps-simulator -serial /dev/ttyUSB0 -baud 4800
+gps-simulator -serial /dev/ttyUSB0 -baud 4800
 ```
 
 Output to serial port (Windows)
 
 ```bash
-./gps-simulator -serial COM3 -baud 9600
+gps-simulator -serial COM3 -baud 9600
 ```
 
 High-speed serial output
 
 ```bash
-./gps-simulator -serial /dev/ttyUSB0 -baud 115200 -rate 100ms
+gps-simulator -serial /dev/ttyUSB0 -baud 115200 -rate 100ms
 ```
 
 #### Data Separation Examples
@@ -151,19 +162,19 @@ High-speed serial output
 Redirect NMEA to file, keep logging on console
 
 ```bash
-./gps-simulator > gps_data.nmea
+gps-simulator > gps_data.nmea
 ```
 
 Send NMEA to serial, redirect logging to file
 
 ```bash
-./gps-simulator -serial /dev/ttyUSB0 2> gps_log.txt
+gps-simulator -serial /dev/ttyUSB0 2> gps_log.txt
 ```
 
 Pipe NMEA data to another program
 
 ```bash
-./gps-simulator | your_gps_application
+gps-simulator | your_gps_application
 ```
 
 #### Quiet Mode Examples
@@ -171,19 +182,19 @@ Pipe NMEA data to another program
 Clean NMEA output without informational messages
 
 ```bash
-./gps-simulator -quiet
+gps-simulator -quiet
 ```
 
 Quiet mode with file output
 
 ```bash
-./gps-simulator -quiet > clean_nmea.txt
+gps-simulator -quiet > clean_nmea.txt
 ```
 
 Quiet mode for piping to applications
 
 ```bash
-./gps-simulator -quiet -rate 100ms | nmea_parser
+gps-simulator -quiet -rate 100ms | nmea_parser
 ```
 
 #### Live GPS Stream Viewing
@@ -191,25 +202,25 @@ Quiet mode for piping to applications
 Quick Demo (Everything Automatic)
 
 ```bash
-./scripts/demo_gps.sh                           # Default settings
-./scripts/demo_gps.sh -jitter 0.8 -rate 500ms  # High jitter, fast updates
-./scripts/demo_gps.sh -lat 40.7128 -lon -74.0060 # New York City
+scripts/demo_gps.sh                           # Default settings
+scripts/demo_gps.sh -jitter 0.8 -rate 500ms  # High jitter, fast updates
+scripts/demo_gps.sh -lat 40.7128 -lon -74.0060 # New York City
 ```
 
 Manual Setup (Two Terminal Windows)
 
 ```bash
 # Terminal 1: Start GPS viewer (auto-creates virtual ports)
-./scripts/watch_gps.sh
+scripts/watch_gps.sh
 
 # Terminal 2: Start GPS simulator
-./gps-simulator -serial /tmp/gps_out -baud 9600 -rate 1s
+gps-simulator -serial /tmp/gps_out -baud 9600 -rate 1s
 ```
 
 View Real GPS Device
 
 ```bash
-./scripts/watch_gps.sh /dev/ttyUSB0
+scripts/watch_gps.sh /dev/ttyUSB0
 ```
 
 ## NMEA Sentences Generated
