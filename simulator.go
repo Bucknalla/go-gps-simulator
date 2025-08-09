@@ -193,7 +193,11 @@ func (s *GPSSimulator) updateSpeedAndCourse() {
 	// Apply jitter to speed and course based on jitter configuration
 	var speedVariation, courseVariation float64
 
-	if s.config.Jitter < 0.2 {
+	if s.config.Jitter == 0.0 {
+		// Zero jitter: no variation at all
+		speedVariation = 0.0
+		courseVariation = 0.0
+	} else if s.config.Jitter < 0.2 {
 		// Low jitter: minimal variation (±5% speed, ±2° course)
 		speedVariation = 0.05
 		courseVariation = 2.0

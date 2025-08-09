@@ -50,12 +50,12 @@ func main() {
 	flag.Float64Var(&config.Longitude, "lon", -122.4194, "Initial longitude (decimal degrees)")
 	flag.Float64Var(&config.Radius, "radius", 100.0, "Wandering radius in meters")
 	flag.Float64Var(&config.Altitude, "altitude", 45.0, "Starting altitude in meters")
-	flag.Float64Var(&config.Jitter, "jitter", 0.5, "GPS position jitter factor (0.0=stable, 1.0=high jitter)")
-	flag.Float64Var(&config.AltitudeJitter, "altitude-jitter", 0.1, "Altitude jitter factor (0.0=stable, 1.0=high variation)")
-	flag.Float64Var(&config.Speed, "speed", 0.1, "Static speed in knots")
+	flag.Float64Var(&config.Jitter, "jitter", 0.0, "GPS position jitter factor (0.0=stable, 1.0=high jitter)")
+	flag.Float64Var(&config.AltitudeJitter, "altitude-jitter", 0.0, "Altitude jitter factor (0.0=stable, 1.0=high variation)")
+	flag.Float64Var(&config.Speed, "speed", 0.0, "Static speed in knots")
 	flag.Float64Var(&config.Course, "course", 0.0, "Static course in degrees (0-359)")
 	flag.IntVar(&config.Satellites, "satellites", 8, "Number of satellites to simulate (4-12)")
-	flag.DurationVar(&config.TimeToLock, "lock-time", 30*time.Second, "Time to GPS lock simulation")
+	flag.DurationVar(&config.TimeToLock, "lock-time", 2*time.Second, "Time to GPS lock simulation")
 	flag.DurationVar(&config.OutputRate, "rate", 1*time.Second, "NMEA output rate")
 	flag.StringVar(&config.SerialPort, "serial", "", "Serial port for NMEA output (e.g., /dev/ttyUSB0, COM1)")
 	flag.IntVar(&config.BaudRate, "baud", 9600, "Serial port baud rate")
@@ -78,9 +78,9 @@ func main() {
 	// Handle version flag
 	if showVersion {
 		if Version != "dev" {
-			fmt.Printf("go-gps-simulator %s\n", Version)
+			fmt.Printf("v%s\n", Version)
 		} else {
-			fmt.Printf("go-gps-simulator %s\n", Commit)
+			fmt.Printf("%s\n", Commit)
 		}
 		os.Exit(0)
 	}
