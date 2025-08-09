@@ -27,6 +27,7 @@ type GPSSimulator struct {
 	replayPoints    []TrackPoint
 	replayIndex     int
 	replayStartTime time.Time
+	replayCompleted bool // Track if we've completed one full pass through the replay
 }
 
 type Satellite struct {
@@ -52,6 +53,7 @@ func NewGPSSimulator(config Config, nmeaWriter io.Writer) (*GPSSimulator, error)
 		nmeaWriter:      nmeaWriter,
 		replayIndex:     0,
 		replayStartTime: now,
+		replayCompleted: false,
 	}
 
 	// Load GPX file for replay mode
@@ -124,6 +126,14 @@ func (s *GPSSimulator) Run() {
 			s.update()
 			s.outputNMEA()
 			s.updateGPX()
+
+			// Check if replay is completed and looping is disabled
+			if s.config.ReplayFile != "" && !s.config.ReplayLoop && s.replayCompleted {
+				if !s.config.Quiet {
+					fmt.Fprintf(os.Stderr, "\nGPX replay completed\n")
+				}
+				return
+			}
 		case <-durationChan:
 			if !s.config.Quiet {
 				fmt.Fprintf(os.Stderr, "\nSimulation completed after %v\n", s.config.Duration)
@@ -459,28 +469,42 @@ func (s *GPSSimulator) updateReplayPosition() {
 		targetTime := s.replayPoints[0].Time.Add(adjustedTime)
 
 		// Find the track point that should be active at this time
-		for i := s.replayIndex; i < len(s.replayPoints)-1; i++ {
-			if targetTime.Before(s.replayPoints[i+1].Time) {
-				s.replayIndex = i
-				break
-			}
-			if i == len(s.replayPoints)-2 {
-				s.replayIndex = i + 1
+		newIndex := 0
+		for i := 0; i < len(s.replayPoints); i++ {
+			if targetTime.After(s.replayPoints[i].Time) || targetTime.Equal(s.replayPoints[i].Time) {
+				newIndex = i
+			} else {
 				break
 			}
 		}
+
+		// If target time is past the last timestamp, we've completed the replay
+		if targetTime.After(s.replayPoints[len(s.replayPoints)-1].Time) {
+			newIndex = len(s.replayPoints) // This will trigger completion check
+		}
+
+		s.replayIndex = newIndex
 	} else {
 		// Index-based progression when timestamps are not sequential
 		// Progress through points at a steady rate (1 point per second at 1x speed)
 		pointInterval := time.Duration(float64(time.Second) / s.config.ReplaySpeed)
 		pointsSinceStart := int(elapsedTime / pointInterval)
-		s.replayIndex = pointsSinceStart % len(s.replayPoints)
+
+		if s.config.ReplayLoop {
+			s.replayIndex = pointsSinceStart % len(s.replayPoints)
+		} else {
+			s.replayIndex = pointsSinceStart
+		}
 	}
 
-	// If we've reached the end, loop back to start
+	// If we've reached the end, handle completion/looping
 	if s.replayIndex >= len(s.replayPoints) {
-		s.replayIndex = 0
-		s.replayStartTime = now
+		s.replayCompleted = true
+		if s.config.ReplayLoop {
+			// Loop back to start if looping is enabled
+			s.replayIndex = 0
+			s.replayStartTime = now
+		}
 		return
 	}
 

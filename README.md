@@ -81,6 +81,7 @@ gps-simulator [options]
 | `-duration`        | duration | 0         | How long to run the simulation (e.g., 30s, 5m, 1h)      |
 | `-replay`          | string   | ""        | GPX file to replay instead of simulating (e.g., track.gpx) |
 | `-replay-speed`    | float    | 1.0       | Replay speed multiplier (1.0=real-time, 2.0=2x speed, 0.5=half speed) |
+| `-replay-loop`     | bool     | false     | Loop the GPX replay continuously (default: stop after one pass) |
 
 **Note**: When using `-gpx`, the `-duration` flag is required.
 
@@ -290,10 +291,16 @@ gps-simulator -gpx -duration 10m -quiet -lat 51.5074 -lon -0.1278 -speed 5.0
 
 #### GPX Replay Examples
 
-Replay a GPX track at real-time speed
+Replay a GPX track once at real-time speed (default behavior)
 
 ```bash
 gps-simulator -replay my_track.gpx
+```
+
+Replay continuously in a loop
+
+```bash
+gps-simulator -replay my_track.gpx -replay-loop
 ```
 
 Replay at 2x speed for faster testing
@@ -306,6 +313,12 @@ Slow motion replay at half speed
 
 ```bash
 gps-simulator -replay my_track.gpx -replay-speed 0.5
+```
+
+Continuous loop at high speed for stress testing
+
+```bash
+gps-simulator -replay track.gpx -replay-loop -replay-speed 10.0
 ```
 
 Replay with custom output settings
@@ -426,8 +439,10 @@ The simulator outputs the following NMEA0183 sentence types:
 - **Automatic Speed/Course Calculation**: Calculates realistic speed and course values from track point timestamps and positions
 - **Configurable Replay Speed**: Speed multipliers from 0.1x (slow motion) to 10x+ (fast forward) for testing scenarios
 - **Seamless NMEA Integration**: Replayed positions generate the same NMEA sentences as simulated data
-- **Loop Functionality**: Automatically restarts from the beginning when reaching the end of the track
+- **Single Pass Default**: By default, stops after completing one pass through the track points
+- **Optional Loop Functionality**: Use `-replay-loop` flag to continuously restart from the beginning when reaching the end
 - **Time-Based Progression**: Respects original GPX timestamps for accurate replay timing
+- **Automatic Completion**: Shows "GPX replay completed" message when finishing a single pass
 
 ## Development
 

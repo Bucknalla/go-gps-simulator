@@ -38,6 +38,7 @@ type Config struct {
 	Duration       time.Duration // How long to run the simulation (0 = run indefinitely)
 	ReplayFile     string        // GPX file to replay (empty = normal simulation mode)
 	ReplaySpeed    float64       // Replay speed multiplier (1.0 = real-time, 2.0 = 2x speed, etc.)
+	ReplayLoop     bool          // Whether to loop the replay (false = stop after one pass, true = loop continuously)
 }
 
 func main() {
@@ -64,6 +65,7 @@ func main() {
 	flag.DurationVar(&config.Duration, "duration", 0, "How long to run the simulation (e.g., 30s, 5m, 1h). Default is indefinite")
 	flag.StringVar(&config.ReplayFile, "replay", "", "GPX file to replay instead of simulating (e.g., track.gpx)")
 	flag.Float64Var(&config.ReplaySpeed, "replay-speed", 1.0, "Replay speed multiplier (1.0=real-time, 2.0=2x speed, 0.5=half speed)")
+	flag.BoolVar(&config.ReplayLoop, "replay-loop", false, "Loop the GPX replay continuously (default: stop after one pass)")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n", os.Args[0])
