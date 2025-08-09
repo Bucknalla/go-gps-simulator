@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -337,6 +338,7 @@ func TestMainFunctionComponents(t *testing.T) {
 	}
 
 	// Test config creation and validation (simulates flag parsing)
+	tempDir := t.TempDir()
 	config := Config{
 		Latitude:       37.7749,
 		Longitude:      -122.4194,
@@ -353,7 +355,7 @@ func TestMainFunctionComponents(t *testing.T) {
 		BaudRate:       9600,
 		Quiet:          false,
 		GPXEnabled:     true,
-		GPXFile:        "test_main.gpx",
+		GPXFile:        filepath.Join(tempDir, "test_main.gpx"),
 	}
 
 	// Test validation logic (simulates main's validation)
@@ -388,7 +390,7 @@ func TestMainFunctionComponents(t *testing.T) {
 
 	// Clean up
 	simulator.Close()
-	os.Remove("test_main.gpx")
+
 }
 
 func TestConfigFieldAccess(t *testing.T) {
@@ -415,7 +417,8 @@ func TestConfigFieldAccess(t *testing.T) {
 
 	// Test string fields
 	config.SerialPort = "/dev/ttyUSB0"
-	config.GPXFile = "test.gpx"
+	tempDir := t.TempDir()
+	config.GPXFile = filepath.Join(tempDir, "test.gpx")
 
 	// Test boolean fields
 	config.Quiet = true

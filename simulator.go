@@ -434,6 +434,13 @@ func (s *GPSSimulator) updateReplayPosition() {
 		return
 	}
 
+	// Defensive check for invalid replay speed
+	if s.config.ReplaySpeed <= 0 {
+		// Log error and use default speed to prevent panic
+		fmt.Fprintf(os.Stderr, "Warning: Invalid replay speed %.2f, using default 1.0x\n", s.config.ReplaySpeed)
+		s.config.ReplaySpeed = 1.0
+	}
+
 	now := time.Now()
 	elapsedTime := now.Sub(s.replayStartTime)
 

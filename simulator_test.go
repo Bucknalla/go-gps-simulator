@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -1174,7 +1175,8 @@ func TestClose(t *testing.T) {
 	// Test Close function with GPX writer
 	config := createTestConfig()
 	config.GPXEnabled = true
-	config.GPXFile = "test_close.gpx"
+	tempDir := t.TempDir()
+	config.GPXFile = filepath.Join(tempDir, "test_close.gpx")
 	config.Quiet = false
 	buffer := &bytes.Buffer{}
 
@@ -1204,12 +1206,12 @@ func TestClose(t *testing.T) {
 	output := string(captured[:n])
 
 	// Should contain GPX file writing message
-	if !strings.Contains(output, "Writing GPX file: test_close.gpx") {
+	if !strings.Contains(output, "Writing GPX file:") || !strings.Contains(output, "test_close.gpx") {
 		t.Errorf("Expected GPX writing message in output, got: %s", output)
 	}
 
 	// Clean up
-	os.Remove("test_close.gpx")
+
 }
 
 func TestCloseWithoutGPX(t *testing.T) {
@@ -1231,7 +1233,8 @@ func TestCloseQuietMode(t *testing.T) {
 	// Test Close function in quiet mode
 	config := createTestConfig()
 	config.GPXEnabled = true
-	config.GPXFile = "test_close_quiet.gpx"
+	tempDir := t.TempDir()
+	config.GPXFile = filepath.Join(tempDir, "test_close_quiet.gpx")
 	config.Quiet = true
 	buffer := &bytes.Buffer{}
 
@@ -1265,14 +1268,15 @@ func TestCloseQuietMode(t *testing.T) {
 	}
 
 	// Clean up
-	os.Remove("test_close_quiet.gpx")
+
 }
 
 func TestUpdateGPX(t *testing.T) {
 	// Test updateGPX function with GPX enabled and GPS locked
 	config := createTestConfig()
 	config.GPXEnabled = true
-	config.GPXFile = "test_update_gpx.gpx"
+	tempDir := t.TempDir()
+	config.GPXFile = filepath.Join(tempDir, "test_update_gpx.gpx")
 	buffer := &bytes.Buffer{}
 
 	sim, err := NewGPSSimulator(config, buffer)
@@ -1304,7 +1308,7 @@ func TestUpdateGPX(t *testing.T) {
 
 	// Clean up
 	sim.Close()
-	os.Remove("test_update_gpx.gpx")
+
 }
 
 func TestUpdateGPXWithoutGPXWriter(t *testing.T) {
@@ -1324,10 +1328,10 @@ func TestUpdateGPXWithoutGPXWriter(t *testing.T) {
 }
 
 func TestNewGPSSimulatorWithGPXError(t *testing.T) {
-	// Test NewGPSSimulator with invalid GPX file path
+	// Test NewGPSSimulator with invalid GPX file path (non-existent directory)
 	config := createTestConfig()
 	config.GPXEnabled = true
-	config.GPXFile = "/invalid/path/test.gpx"
+	config.GPXFile = "/non/existent/directory/test.gpx"
 	buffer := &bytes.Buffer{}
 
 	_, err := NewGPSSimulator(config, buffer)
@@ -1344,7 +1348,8 @@ func TestNewGPSSimulatorWithGPXEnabled(t *testing.T) {
 	// Test NewGPSSimulator with GPX enabled
 	config := createTestConfig()
 	config.GPXEnabled = true
-	config.GPXFile = "test_new_simulator.gpx"
+	tempDir := t.TempDir()
+	config.GPXFile = filepath.Join(tempDir, "test_new_simulator.gpx")
 	buffer := &bytes.Buffer{}
 
 	sim, err := NewGPSSimulator(config, buffer)
@@ -1358,7 +1363,7 @@ func TestNewGPSSimulatorWithGPXEnabled(t *testing.T) {
 
 	// Clean up
 	sim.Close()
-	os.Remove("test_new_simulator.gpx")
+
 }
 
 func TestRunWithDuration(t *testing.T) {
@@ -1447,7 +1452,8 @@ func TestUpdateGPXWriteError(t *testing.T) {
 	// Test updateGPX with WriteToFile error
 	config := createTestConfig()
 	config.GPXEnabled = true
-	config.GPXFile = "test_update_gpx_error.gpx"
+	tempDir := t.TempDir()
+	config.GPXFile = filepath.Join(tempDir, "test_update_gpx_error.gpx")
 	buffer := &bytes.Buffer{}
 
 	sim, err := NewGPSSimulator(config, buffer)
@@ -1455,7 +1461,6 @@ func TestUpdateGPXWriteError(t *testing.T) {
 		t.Fatalf("Failed to create GPS simulator: %v", err)
 	}
 	defer sim.Close()
-	defer os.Remove("test_update_gpx_error.gpx")
 
 	sim.isLocked = true
 
@@ -1494,7 +1499,8 @@ func TestCloseWithGPXError(t *testing.T) {
 	// Test Close with GPX writer error
 	config := createTestConfig()
 	config.GPXEnabled = true
-	config.GPXFile = "test_close_gpx_error.gpx"
+	tempDir := t.TempDir()
+	config.GPXFile = filepath.Join(tempDir, "test_close_gpx_error.gpx")
 	config.Quiet = false
 	buffer := &bytes.Buffer{}
 
@@ -1502,7 +1508,6 @@ func TestCloseWithGPXError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create GPS simulator: %v", err)
 	}
-	defer os.Remove("test_close_gpx_error.gpx")
 
 	// Add some track points
 	sim.isLocked = true
@@ -1529,7 +1534,7 @@ func TestCloseWithGPXError(t *testing.T) {
 	output := string(captured[:n])
 
 	// Should contain both writing message and error message
-	if !strings.Contains(output, "Writing GPX file: test_close_gpx_error.gpx") {
+	if !strings.Contains(output, "Writing GPX file:") || !strings.Contains(output, "test_close_gpx_error.gpx") {
 		t.Errorf("Expected GPX writing message in output, got: %s", output)
 	}
 	if !strings.Contains(output, "Error closing GPX file:") {
@@ -1949,8 +1954,8 @@ func TestDeterministicBoundaryConditions(t *testing.T) {
 
 func TestNewGPSSimulatorWithReplay(t *testing.T) {
 	// Create a test GPX file
-	tempFile := "test_replay_simulator.gpx"
-	defer os.Remove(tempFile)
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_replay_simulator.gpx")
 
 	gpxContent := `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="test" xmlns="http://www.topografix.com/GPX/1/1">
@@ -2221,8 +2226,8 @@ func TestDistanceFromCenterRefactoring(t *testing.T) {
 
 func TestUpdateReplayPosition(t *testing.T) {
 	// Create a test GPX file with route data (non-sequential timestamps)
-	tempFile := "test_replay_update.gpx"
-	defer os.Remove(tempFile)
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_replay_update.gpx")
 
 	gpxContent := `<?xml version="1.0"?>
 <gpx version="1.0" creator="test" xmlns="http://www.topografix.com/GPX/1/0">
@@ -2331,8 +2336,8 @@ func TestUpdateReplayPosition(t *testing.T) {
 
 func TestUpdateReplayPositionWithSequentialTimestamps(t *testing.T) {
 	// Create a test GPX file with sequential timestamps
-	tempFile := "test_replay_sequential.gpx"
-	defer os.Remove(tempFile)
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_replay_sequential.gpx")
 
 	gpxContent := `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="test" xmlns="http://www.topografix.com/GPX/1/1">
@@ -2412,8 +2417,8 @@ func TestUpdateReplayPositionWithSequentialTimestamps(t *testing.T) {
 
 func TestReplaySpeedLessThanOne(t *testing.T) {
 	// Test replay speeds less than 1.0 to ensure no division by zero panic
-	tempFile := "test_slow_replay.gpx"
-	defer os.Remove(tempFile)
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_slow_replay.gpx")
 
 	gpxContent := `<?xml version="1.0"?>
 <gpx version="1.0" creator="test" xmlns="http://www.topografix.com/GPX/1/0">
@@ -2476,6 +2481,102 @@ func TestReplaySpeedLessThanOne(t *testing.T) {
 			if tc.replaySpeed <= 0.5 && sim.replayIndex != 0 {
 				t.Errorf("Expected replay index 0 with slow speed %.1fx after 5 seconds, got %d",
 					tc.replaySpeed, sim.replayIndex)
+			}
+		})
+	}
+}
+
+func TestReplaySpeedZeroDefensiveCheck(t *testing.T) {
+	// Test that zero replay speed is handled defensively without panic
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_zero_speed.gpx")
+
+	gpxContent := `<?xml version="1.0"?>
+<gpx version="1.0" creator="test" xmlns="http://www.topografix.com/GPX/1/0">
+  <rte>
+    <name>Test Route</name>
+    <rtept lat="42.430950" lon="-71.107628">
+      <ele>23.5</ele>
+      <time>2001-11-28T21:05:28Z</time>
+    </rtept>
+    <rtept lat="42.431240" lon="-71.109236">
+      <ele>26.6</ele>
+      <time>2001-12-01T12:00:00Z</time>
+    </rtept>
+  </rte>
+</gpx>`
+
+	err := os.WriteFile(tempFile, []byte(gpxContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test GPX file: %v", err)
+	}
+
+	testCases := []struct {
+		name          string
+		replaySpeed   float64
+		expectWarning bool
+	}{
+		{"Zero speed", 0.0, true},
+		{"Negative speed", -0.5, true},
+		{"Very small positive speed", 0.001, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := createTestConfig()
+			config.ReplayFile = tempFile
+			config.ReplaySpeed = tc.replaySpeed
+
+			buffer := &bytes.Buffer{}
+			sim, err := NewGPSSimulator(config, buffer)
+			if err != nil {
+				t.Fatalf("Failed to create GPS simulator: %v", err)
+			}
+
+			// Capture stderr to check for warning messages
+			oldStderr := os.Stderr
+			r, w, _ := os.Pipe()
+			os.Stderr = w
+
+			// This should not panic, even with invalid replay speed
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("updateReplayPosition panicked with replay speed %.3f: %v", tc.replaySpeed, r)
+				}
+			}()
+
+			// Simulate some time passing and update position
+			sim.replayStartTime = time.Now().Add(-2 * time.Second)
+			sim.updateReplayPosition()
+
+			// Restore stderr and check for warnings
+			w.Close()
+			os.Stderr = oldStderr
+			captured := make([]byte, 1000)
+			n, _ := r.Read(captured)
+			output := string(captured[:n])
+
+			if tc.expectWarning {
+				if !strings.Contains(output, "Warning: Invalid replay speed") {
+					t.Errorf("Expected warning for invalid replay speed %.3f, got: %s", tc.replaySpeed, output)
+				}
+				// Speed should have been corrected to 1.0
+				if sim.config.ReplaySpeed != 1.0 {
+					t.Errorf("Expected replay speed to be corrected to 1.0, got %.3f", sim.config.ReplaySpeed)
+				}
+			} else {
+				if strings.Contains(output, "Warning: Invalid replay speed") {
+					t.Errorf("Unexpected warning for valid replay speed %.3f: %s", tc.replaySpeed, output)
+				}
+				// Speed should remain unchanged
+				if sim.config.ReplaySpeed != tc.replaySpeed {
+					t.Errorf("Expected replay speed to remain %.3f, got %.3f", tc.replaySpeed, sim.config.ReplaySpeed)
+				}
+			}
+
+			// Verify position was updated (should be at first point)
+			if sim.currentLat != 42.430950 {
+				t.Errorf("Expected lat 42.430950, got %f", sim.currentLat)
 			}
 		})
 	}
