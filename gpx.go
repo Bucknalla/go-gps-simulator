@@ -37,10 +37,9 @@ type TrackPoint struct {
 
 // GPXWriter handles writing GPS data to a GPX file
 type GPXWriter struct {
-	filename    string
-	gpx         *GPX
-	file        *os.File
-	isFirstTime bool
+	filename string
+	gpx      *GPX
+	file     *os.File
 }
 
 // NewGPXWriter creates a new GPX writer
@@ -63,10 +62,9 @@ func NewGPXWriter(filename string) (*GPXWriter, error) {
 	}
 
 	writer := &GPXWriter{
-		filename:    filename,
-		gpx:         gpx,
-		file:        file,
-		isFirstTime: true,
+		filename: filename,
+		gpx:      gpx,
+		file:     file,
 	}
 
 	return writer, nil
