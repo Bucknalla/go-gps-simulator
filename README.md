@@ -19,15 +19,16 @@ Designed for testing GPS-dependent applications, embedded systems development, o
 
 ## Installation
 
+### Install with Homebrew
+
+```bash
+brew tap Bucknalla/tools
+brew install gps-simulator
+```
+
 ### Download the latest release
 
-Download the appropriate binary for your platform from the [Releases](https://github.com/Bucknalla/go-gps-simulator/releases) page:
-
-- **Linux (x64)**: `go-gps-simulator-linux-amd64`
-- **Linux (ARM64)**: `go-gps-simulator-linux-arm64`
-- **macOS (Intel)**: `go-gps-simulator-darwin-amd64`
-- **macOS (Apple Silicon)**: `go-gps-simulator-darwin-arm64`
-- **Windows (x64)**: `go-gps-simulator-windows-amd64.exe`
+Download the appropriate binary for your platform from the [Releases](https://github.com/Bucknalla/go-gps-simulator/releases) page
 
 ### Build from Source
 

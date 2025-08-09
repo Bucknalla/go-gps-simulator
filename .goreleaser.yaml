@@ -103,7 +103,8 @@ nfpms:
           mode: 0755
 
 brews:
-  - repository:
+  - name: gps-simulator
+    repository:
       owner: Bucknalla
       name: homebrew-tools
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
