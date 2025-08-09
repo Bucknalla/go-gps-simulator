@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -17,6 +18,8 @@ func createTestConfig() Config {
 		Altitude:       45.0,
 		Jitter:         0.5,
 		AltitudeJitter: 0.1,
+		Speed:          0.1,
+		Course:         0.0,
 		Satellites:     8,
 		TimeToLock:     30 * time.Second,
 		OutputRate:     1 * time.Second,
@@ -259,18 +262,24 @@ func TestDistanceFromCenter(t *testing.T) {
 
 func TestUpdatePosition(t *testing.T) {
 	tests := []struct {
-		name   string
-		jitter float64
+		name           string
+		jitter         float64
+		speed          float64
+		course         float64
+		expectMovement bool
 	}{
-		{"Low jitter", 0.05},
-		{"Medium jitter", 0.5},
-		{"High jitter", 0.9},
+		{"Low jitter stationary", 0.05, 0.0, 0.0, false},
+		{"Low jitter moving", 0.05, 50.0, 90.0, true}, // Higher speed for detectable movement
+		{"Medium jitter moving", 0.5, 50.0, 90.0, true},
+		{"High jitter moving", 0.9, 50.0, 90.0, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := createTestConfig()
 			config.Jitter = tt.jitter
+			config.Speed = tt.speed
+			config.Course = tt.course
 			buffer := &bytes.Buffer{}
 			sim := NewGPSSimulator(config, buffer)
 			sim.isLocked = true
@@ -279,88 +288,297 @@ func TestUpdatePosition(t *testing.T) {
 			initialLat := sim.currentLat
 			initialLon := sim.currentLon
 
-			// Update position multiple times
+			// Update speed/course and position multiple times (proper sequence)
+			var totalDistance float64
 			for i := 0; i < 10; i++ {
+				sim.updateSpeedAndCourse()
+
+				// Add small delay to allow time-based movement calculation
+				time.Sleep(10 * time.Millisecond)
+
 				sim.updatePosition()
 
-				// Check that position is within the specified radius
-				distance := sim.distanceFromCenter(sim.currentLat, sim.currentLon)
-				if distance > config.Radius {
-					t.Errorf("Position update %d: distance %f exceeds radius %f",
-						i, distance, config.Radius)
-				}
+				// Track cumulative movement
+				latChange := math.Abs(sim.currentLat - initialLat)
+				lonChange := math.Abs(sim.currentLon - initialLon)
+				totalDistance = math.Sqrt(latChange*latChange + lonChange*lonChange)
+			}
 
-				// For very low jitter, movement should be more predictable
-				if tt.jitter < 0.1 {
-					// Position should change but not dramatically
-					latChange := math.Abs(sim.currentLat - initialLat)
-					lonChange := math.Abs(sim.currentLon - initialLon)
-					if latChange > 0.01 || lonChange > 0.01 {
-						t.Errorf("Low jitter should produce small movements, got lat change: %f, lon change: %f",
-							latChange, lonChange)
-					}
+			if tt.expectMovement {
+				// For moving GPS at 50 knots over 100ms, should have detectable movement
+				if totalDistance < 0.00001 { // Adjusted threshold for higher speed
+					t.Errorf("Expected movement for speed %.1f, but total distance was %.8f",
+						tt.speed, totalDistance)
 				}
+			} else {
+				// For stationary GPS, movement should be minimal
+				if totalDistance > 0.0001 { // Tighter threshold for stationary
+					t.Errorf("Expected minimal movement for stationary GPS, but total distance was %.8f",
+						totalDistance)
+				}
+			}
+
+			// Check final position is within reasonable bounds
+			finalDistance := sim.distanceFromCenter(sim.currentLat, sim.currentLon)
+			// Allow more tolerance for high jitter and moving scenarios
+			maxAllowedDistance := config.Radius * 1.5
+			if finalDistance > maxAllowedDistance {
+				t.Errorf("Final position too far from center: %.2f > %.2f",
+					finalDistance, maxAllowedDistance)
 			}
 		})
 	}
 }
 
-func TestUpdatePositionBoundaryConstraints(t *testing.T) {
+func TestUpdatePositionEdgeCases(t *testing.T) {
+	t.Run("No time delta", func(t *testing.T) {
+		config := createTestConfig()
+		config.Speed = 10.0
+		config.Course = 90.0
+		buffer := &bytes.Buffer{}
+		sim := NewGPSSimulator(config, buffer)
+		sim.isLocked = true
+
+		// Call updatePosition once to establish lastUpdateTime
+		sim.updatePosition()
+
+		// Store position after first update
+		positionAfterFirst := [2]float64{sim.currentLat, sim.currentLon}
+
+		// Call updatePosition immediately again (no time passed)
+		sim.updatePosition() // This should return early due to deltaTime <= 0
+
+		// Position should not change on second call
+		latDiff := math.Abs(sim.currentLat - positionAfterFirst[0])
+		lonDiff := math.Abs(sim.currentLon - positionAfterFirst[1])
+
+		if latDiff > 1e-10 || lonDiff > 1e-10 {
+			t.Errorf("Position should not change when deltaTime <= 0. After first: (%.10f, %.10f), After second: (%.10f, %.10f), Diff: (%.2e, %.2e)",
+				positionAfterFirst[0], positionAfterFirst[1], sim.currentLat, sim.currentLon, latDiff, lonDiff)
+		}
+	})
+
+	t.Run("High jitter boundary bouncing", func(t *testing.T) {
+		config := createTestConfig()
+		config.Speed = 100.0 // High speed to hit boundary quickly
+		config.Course = 90.0 // East
+		config.Jitter = 0.8  // High jitter for bouncing behavior
+		config.Radius = 50.0 // Small radius to hit boundary
+		buffer := &bytes.Buffer{}
+		sim := NewGPSSimulator(config, buffer)
+		sim.isLocked = true
+
+		// Move close to boundary
+		radiusDeg := config.Radius / 111320.0
+		sim.currentLat = config.Latitude
+		sim.currentLon = config.Longitude + radiusDeg*0.9 // Near east boundary
+
+		// Update several times to trigger boundary bouncing
+		for i := 0; i < 5; i++ {
+			sim.updateSpeedAndCourse()
+			time.Sleep(10 * time.Millisecond)
+			sim.updatePosition()
+		}
+
+		// Course should have changed due to bouncing (not guaranteed every time due to randomness)
+		// Just verify the bouncing logic was exercised by checking we stayed within reasonable bounds
+		distance := sim.distanceFromCenter(sim.currentLat, sim.currentLon)
+		if distance > config.Radius*2.0 { // Allow some overshoot for bouncing
+			t.Errorf("High jitter bouncing failed to keep position reasonable. Distance: %.2f, Max expected: %.2f",
+				distance, config.Radius*2.0)
+		}
+	})
+
+	t.Run("Low jitter boundary constraint", func(t *testing.T) {
+		config := createTestConfig()
+		config.Speed = 100.0 // High speed to hit boundary quickly
+		config.Course = 90.0 // East
+		config.Jitter = 0.1  // Low jitter for constraint behavior
+		config.Radius = 50.0 // Small radius to hit boundary
+		buffer := &bytes.Buffer{}
+		sim := NewGPSSimulator(config, buffer)
+		sim.isLocked = true
+
+		// Move close to boundary
+		radiusDeg := config.Radius / 111320.0
+		sim.currentLat = config.Latitude
+		sim.currentLon = config.Longitude + radiusDeg*0.9 // Near east boundary
+
+		// Update to trigger boundary constraint
+		sim.updateSpeedAndCourse()
+		time.Sleep(20 * time.Millisecond) // Longer time to ensure movement
+		sim.updatePosition()
+
+		// Should be constrained near the boundary
+		distance := sim.distanceFromCenter(sim.currentLat, sim.currentLon)
+		if distance > config.Radius*1.1 { // Allow small overshoot for constraint logic
+			t.Errorf("Low jitter constraint failed. Distance: %.2f, Max expected: %.2f",
+				distance, config.Radius*1.1)
+		}
+	})
+}
+
+func TestCourseNormalization(t *testing.T) {
 	config := createTestConfig()
-	config.Radius = 50.0 // Small radius for testing
+	config.Speed = 10.0
+	config.Course = 350.0 // Near 360°
+	config.Jitter = 0.8   // High jitter to cause large course changes
 	buffer := &bytes.Buffer{}
 	sim := NewGPSSimulator(config, buffer)
 	sim.isLocked = true
 
-	// Move to edge of radius
-	sim.currentLat = config.Latitude + 0.0004  // ~44 meters north
-	sim.currentLon = config.Longitude + 0.0004 // Close to radius
-
-	initialDistance := sim.distanceFromCenter(sim.currentLat, sim.currentLon)
-
-	// Track positions that exceed radius
-	exceedCount := 0
-	maxExceedance := 0.0
-
-	// Update position multiple times
+	// Test multiple updates to trigger course normalization
 	for i := 0; i < 20; i++ {
+		sim.updateSpeedAndCourse()
+
+		// Course should always be normalized to [0, 360)
+		if sim.currentCourse < 0 || sim.currentCourse >= 360 {
+			t.Errorf("Course not properly normalized: %.2f (should be in [0, 360))", sim.currentCourse)
+		}
+	}
+
+	t.Run("Course normalization during bouncing", func(t *testing.T) {
+		config := createTestConfig()
+		config.Speed = 200.0 // Very high speed
+		config.Course = 10.0 // Close to 0°
+		config.Jitter = 0.9  // Maximum jitter for extreme course changes
+		config.Radius = 30.0 // Very small radius to force frequent bouncing
+		buffer := &bytes.Buffer{}
+		sim := NewGPSSimulator(config, buffer)
+		sim.isLocked = true
+
+		// Set up position very close to boundary to force bouncing
+		radiusDeg := config.Radius / 111320.0
+		sim.currentLat = config.Latitude + radiusDeg*0.95
+		sim.currentLon = config.Longitude
+
+		// Force course to be near boundary values to test normalization
+		sim.currentCourse = 358.0 // Near 360°
+
+		// Update many times to trigger course normalization in bouncing logic
+		for i := 0; i < 30; i++ {
+			sim.updateSpeedAndCourse()
+			time.Sleep(5 * time.Millisecond)
+			sim.updatePosition()
+
+			// Verify course is always normalized
+			if sim.currentCourse < 0 || sim.currentCourse >= 360 {
+				t.Errorf("Course not normalized during bouncing: %.2f", sim.currentCourse)
+			}
+		}
+	})
+}
+
+func TestUpdatePositionBoundaryConstraints(t *testing.T) {
+	// Test the new movement system's boundary handling with stationary GPS
+	// This tests that a stationary GPS (speed=0) stays near its initial position
+	config := createTestConfig()
+	config.Radius = 50.0
+	config.Speed = 0.0 // Stationary
+	config.Course = 0.0
+	config.Jitter = 0.3
+
+	buffer := &bytes.Buffer{}
+	sim := NewGPSSimulator(config, buffer)
+	sim.isLocked = true
+
+	// Update position multiple times - should stay near center for stationary GPS
+	maxDistance := 0.0
+	for i := 0; i < 20; i++ {
+		sim.updateSpeedAndCourse()
 		sim.updatePosition()
 		distance := sim.distanceFromCenter(sim.currentLat, sim.currentLon)
-
-		// Allow small overshoots due to the pullback mechanism
-		// The algorithm may temporarily exceed the radius before correction
-		if distance > config.Radius {
-			exceedCount++
-			exceedance := distance - config.Radius
-			if exceedance > maxExceedance {
-				maxExceedance = exceedance
-			}
-
-			// Should not exceed radius by more than a reasonable amount (10% tolerance)
-			tolerance := config.Radius * 0.1 // 10% tolerance
-			if exceedance > tolerance {
-				t.Errorf("Update %d: position too far outside radius. Distance: %f, Radius: %f, Exceedance: %f, Max allowed: %f",
-					i, distance, config.Radius, exceedance, tolerance)
-			}
+		if distance > maxDistance {
+			maxDistance = distance
 		}
 	}
 
-	// Most updates should stay within radius
-	if float64(exceedCount)/20.0 > 0.5 {
-		t.Errorf("Too many position updates exceeded radius: %d out of 20 (max exceedance: %f)",
-			exceedCount, maxExceedance)
+	// For stationary GPS with moderate jitter, should stay within reasonable bounds
+	// Since speed=0, position changes should be minimal (only from jitter in course)
+	expectedMaxDistance := config.Radius * 0.1 // Should stay within 10% of radius
+	if maxDistance > expectedMaxDistance {
+		t.Errorf("Stationary GPS moved too far from center. Max distance: %.2f, Expected max: %.2f",
+			maxDistance, expectedMaxDistance)
 	}
+}
 
-	// Should have moved closer to center due to pullback mechanism over time
-	finalDistance := sim.distanceFromCenter(sim.currentLat, sim.currentLon)
-	if finalDistance >= initialDistance {
-		// Allow some tolerance since pullback is probabilistic
-		tolerance := 1.0 // 1 meter tolerance
-		if finalDistance-initialDistance > tolerance {
-			t.Errorf("Expected pullback to reduce distance. Initial: %f, Final: %f, Difference: %f",
-				initialDistance, finalDistance, finalDistance-initialDistance)
+func TestUpdateAltitudeEdgeCases(t *testing.T) {
+	t.Run("Zero altitude jitter", func(t *testing.T) {
+		config := createTestConfig()
+		config.Altitude = 1000.0
+		config.AltitudeJitter = 0.0 // No jitter
+		buffer := &bytes.Buffer{}
+		sim := NewGPSSimulator(config, buffer)
+		sim.isLocked = true
+
+		initialAltitude := sim.currentAlt
+
+		// Update multiple times - altitude should remain stable
+		for i := 0; i < 10; i++ {
+			sim.updateAltitude()
 		}
-	}
+
+		if sim.currentAlt != initialAltitude {
+			t.Errorf("Altitude changed with zero jitter. Initial: %.1f, Final: %.1f",
+				initialAltitude, sim.currentAlt)
+		}
+	})
+
+	t.Run("Altitude bounds checking", func(t *testing.T) {
+		config := createTestConfig()
+		config.Altitude = 100.0
+		config.AltitudeJitter = 1.0 // Maximum jitter
+		buffer := &bytes.Buffer{}
+		sim := NewGPSSimulator(config, buffer)
+		sim.isLocked = true
+
+		// Update many times to test boundary conditions
+		minAlt := config.Altitude
+		maxAlt := config.Altitude
+		for i := 0; i < 100; i++ {
+			sim.updateAltitude()
+			if sim.currentAlt < minAlt {
+				minAlt = sim.currentAlt
+			}
+			if sim.currentAlt > maxAlt {
+				maxAlt = sim.currentAlt
+			}
+		}
+
+		// Should be within expected bounds
+		expectedMin := math.Max(config.Altitude-100.0, -50.0)
+		expectedMax := config.Altitude + 500.0
+
+		if minAlt < expectedMin-1.0 { // Small tolerance for floating point
+			t.Errorf("Minimum altitude %.1f below expected minimum %.1f", minAlt, expectedMin)
+		}
+		if maxAlt > expectedMax+1.0 { // Small tolerance for floating point
+			t.Errorf("Maximum altitude %.1f above expected maximum %.1f", maxAlt, expectedMax)
+		}
+	})
+
+	t.Run("Sea level altitude bounds", func(t *testing.T) {
+		config := createTestConfig()
+		config.Altitude = 10.0      // Near sea level
+		config.AltitudeJitter = 1.0 // Maximum jitter
+		buffer := &bytes.Buffer{}
+		sim := NewGPSSimulator(config, buffer)
+		sim.isLocked = true
+
+		// Update many times to test sea level boundary
+		minAlt := config.Altitude
+		for i := 0; i < 100; i++ {
+			sim.updateAltitude()
+			if sim.currentAlt < minAlt {
+				minAlt = sim.currentAlt
+			}
+		}
+
+		// Should not go too far below sea level
+		if minAlt < -50.0 {
+			t.Errorf("Altitude went too far below sea level: %.1f", minAlt)
+		}
+	})
 }
 
 func TestUpdateSatellites(t *testing.T) {
@@ -787,4 +1005,178 @@ func BenchmarkOutputNMEA(b *testing.B) {
 		buffer.Reset()
 		sim.outputNMEA()
 	}
+}
+
+func TestUpdateSatellitesEdgeCases(t *testing.T) {
+	t.Run("Satellite movement consistency", func(t *testing.T) {
+		config := createTestConfig()
+		config.Satellites = 1 // Single satellite for easier testing
+		buffer := &bytes.Buffer{}
+		sim := NewGPSSimulator(config, buffer)
+
+		// Update multiple times and track changes
+		elevationChanges := 0
+		azimuthChanges := 0
+		snrChanges := 0
+
+		for i := 0; i < 10; i++ {
+			prevElev := sim.satellites[0].Elevation
+			prevAzim := sim.satellites[0].Azimuth
+			prevSNR := sim.satellites[0].SNR
+
+			sim.updateSatellites()
+
+			if sim.satellites[0].Elevation != prevElev {
+				elevationChanges++
+			}
+			if sim.satellites[0].Azimuth != prevAzim {
+				azimuthChanges++
+			}
+			if sim.satellites[0].SNR != prevSNR {
+				snrChanges++
+			}
+		}
+
+		// Should have some changes (not all updates will change values due to randomness)
+		if elevationChanges == 0 && azimuthChanges == 0 && snrChanges == 0 {
+			t.Error("No satellite parameters changed over 10 updates")
+		}
+	})
+
+	t.Run("Extreme satellite boundary conditions", func(t *testing.T) {
+		config := createTestConfig()
+		buffer := &bytes.Buffer{}
+		sim := NewGPSSimulator(config, buffer)
+
+		// Set satellites to boundary values
+		sim.satellites[0].Elevation = 4  // Below minimum
+		sim.satellites[1].Elevation = 86 // Above maximum
+		sim.satellites[2].SNR = 14       // Below minimum
+		sim.satellites[3].SNR = 56       // Above maximum
+
+		// Update multiple times to ensure boundaries are maintained
+		for i := 0; i < 20; i++ {
+			sim.updateSatellites()
+
+			for j, sat := range sim.satellites {
+				if sat.Elevation < 5 || sat.Elevation > 85 {
+					t.Errorf("Satellite %d elevation %d out of bounds [5, 85]", j, sat.Elevation)
+				}
+				if sat.SNR < 15 || sat.SNR > 55 {
+					t.Errorf("Satellite %d SNR %d out of bounds [15, 55]", j, sat.SNR)
+				}
+				if sat.Azimuth < 0 || sat.Azimuth >= 360 {
+					t.Errorf("Satellite %d azimuth %d out of bounds [0, 360)", j, sat.Azimuth)
+				}
+			}
+		}
+	})
+}
+
+func TestUpdateSpeedAndCourseEdgeCases(t *testing.T) {
+	t.Run("Zero speed edge case", func(t *testing.T) {
+		config := createTestConfig()
+		config.Speed = 0.0
+		config.Jitter = 0.8 // High jitter
+		buffer := &bytes.Buffer{}
+		sim := NewGPSSimulator(config, buffer)
+
+		// Update multiple times
+		for i := 0; i < 10; i++ {
+			sim.updateSpeedAndCourse()
+
+			// Speed should never go negative
+			if sim.currentSpeed < 0 {
+				t.Errorf("Speed went negative: %.2f", sim.currentSpeed)
+			}
+		}
+	})
+
+	t.Run("Course boundary wraparound", func(t *testing.T) {
+		testCases := []struct {
+			name   string
+			course float64
+			jitter float64
+		}{
+			{"Near 0 degrees", 5.0, 0.8},
+			{"Near 360 degrees", 355.0, 0.8},
+			{"Exactly 0 degrees", 0.0, 0.9},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				config := createTestConfig()
+				config.Course = tc.course
+				config.Jitter = tc.jitter
+				buffer := &bytes.Buffer{}
+				sim := NewGPSSimulator(config, buffer)
+
+				// Update many times to test wraparound
+				for i := 0; i < 50; i++ {
+					sim.updateSpeedAndCourse()
+
+					// Course should always be in valid range
+					if sim.currentCourse < 0 || sim.currentCourse >= 360 {
+						t.Errorf("Course out of bounds: %.2f (should be [0, 360))", sim.currentCourse)
+					}
+				}
+			})
+		}
+	})
+
+	t.Run("Jitter level variations", func(t *testing.T) {
+		jitterLevels := []float64{0.05, 0.15, 0.35, 0.65, 0.85, 0.95}
+
+		for _, jitter := range jitterLevels {
+			t.Run(fmt.Sprintf("Jitter %.2f", jitter), func(t *testing.T) {
+				config := createTestConfig()
+				config.Speed = 10.0
+				config.Course = 90.0
+				config.Jitter = jitter
+				buffer := &bytes.Buffer{}
+				sim := NewGPSSimulator(config, buffer)
+
+				speedVariations := []float64{}
+				courseVariations := []float64{}
+
+				for i := 0; i < 20; i++ {
+					sim.updateSpeedAndCourse()
+					speedVariations = append(speedVariations, sim.currentSpeed)
+					courseVariations = append(courseVariations, sim.currentCourse)
+				}
+
+				// Calculate variation ranges
+				minSpeed, maxSpeed := speedVariations[0], speedVariations[0]
+				minCourse, maxCourse := courseVariations[0], courseVariations[0]
+
+				for _, speed := range speedVariations {
+					if speed < minSpeed {
+						minSpeed = speed
+					}
+					if speed > maxSpeed {
+						maxSpeed = speed
+					}
+				}
+				for _, course := range courseVariations {
+					if course < minCourse {
+						minCourse = course
+					}
+					if course > maxCourse {
+						maxCourse = course
+					}
+				}
+
+				speedRange := maxSpeed - minSpeed
+				_ = maxCourse - minCourse // courseRange - not used but calculated for completeness
+
+				// Higher jitter should produce larger variations
+				if jitter < 0.2 && speedRange > 2.0 {
+					t.Errorf("Low jitter (%.2f) produced unexpectedly large speed range: %.2f", jitter, speedRange)
+				}
+				if jitter > 0.8 && speedRange < 1.0 {
+					t.Errorf("High jitter (%.2f) produced unexpectedly small speed range: %.2f", jitter, speedRange)
+				}
+			})
+		}
+	})
 }

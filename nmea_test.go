@@ -80,6 +80,8 @@ func createTestSimulator() *GPSSimulator {
 		Longitude:  -122.4194,
 		Radius:     100.0,
 		Jitter:     0.5,
+		Speed:      0.1,
+		Course:     0.0,
 		Satellites: 8,
 		TimeToLock: 30 * time.Second,
 		OutputRate: 1 * time.Second,
@@ -229,6 +231,158 @@ func TestGenerateNoFixRMC(t *testing.T) {
 	}
 	if len(parts) > 5 && parts[5] != "" {
 		t.Errorf("generateNoFixRMC longitude should be empty, got: %s", parts[5])
+	}
+}
+
+func TestGenerateRMCWithSpeedAndCourse(t *testing.T) {
+	// Create a simulator with custom speed and course
+	config := Config{
+		Latitude:   37.7749,
+		Longitude:  -122.4194,
+		Radius:     100.0,
+		Jitter:     0.5,
+		Speed:      12.5,
+		Course:     270.0,
+		Satellites: 8,
+		TimeToLock: 30 * time.Second,
+		OutputRate: 1 * time.Second,
+	}
+
+	now := time.Now()
+	sim := &GPSSimulator{
+		config:         config,
+		currentLat:     config.Latitude,
+		currentLon:     config.Longitude,
+		currentSpeed:   config.Speed,
+		currentCourse:  config.Course,
+		isLocked:       true,
+		lastUpdateTime: now,
+	}
+
+	testTime := time.Date(2024, 1, 15, 12, 34, 56, 0, time.UTC)
+	result := sim.generateRMC(testTime)
+
+	// Check basic format
+	if !strings.HasPrefix(result, "$GPRMC,") {
+		t.Errorf("generateRMC should start with '$GPRMC,', got: %s", result)
+	}
+
+	// Parse the RMC sentence to check speed and course fields
+	parts := strings.Split(result, ",")
+	if len(parts) < 9 {
+		t.Fatalf("RMC sentence should have at least 9 fields, got %d", len(parts))
+	}
+
+	// Check speed field (index 7) - should match currentSpeed
+	expectedSpeed := "12.5"
+	if parts[7] != expectedSpeed {
+		t.Errorf("Expected speed %s, got %s", expectedSpeed, parts[7])
+	}
+
+	// Check course field (index 8) - should match currentCourse
+	expectedCourse := "270.0"
+	if parts[8] != expectedCourse {
+		t.Errorf("Expected course %s, got %s", expectedCourse, parts[8])
+	}
+}
+
+func TestUpdateSpeedAndCourse(t *testing.T) {
+	tests := []struct {
+		name                string
+		jitter              float64
+		baseSpeed           float64
+		baseCourse          float64
+		expectedSpeedRange  [2]float64 // [min, max] expected speed range
+		expectedCourseRange [2]float64 // [min, max] expected course range
+	}{
+		{
+			name:                "Low jitter",
+			jitter:              0.1,
+			baseSpeed:           10.0,
+			baseCourse:          90.0,
+			expectedSpeedRange:  [2]float64{9.5, 10.5},  // ±5%
+			expectedCourseRange: [2]float64{88.0, 92.0}, // ±2°
+		},
+		{
+			name:                "Medium jitter",
+			jitter:              0.5,
+			baseSpeed:           10.0,
+			baseCourse:          90.0,
+			expectedSpeedRange:  [2]float64{7.0, 13.0},   // ±30%
+			expectedCourseRange: [2]float64{75.0, 105.0}, // ±15°
+		},
+		{
+			name:                "High jitter",
+			jitter:              0.9,
+			baseSpeed:           10.0,
+			baseCourse:          90.0,
+			expectedSpeedRange:  [2]float64{5.0, 15.0},   // ±50%
+			expectedCourseRange: [2]float64{60.0, 120.0}, // ±30°
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := Config{
+				Latitude:   37.7749,
+				Longitude:  -122.4194,
+				Jitter:     tt.jitter,
+				Speed:      tt.baseSpeed,
+				Course:     tt.baseCourse,
+				Satellites: 8,
+			}
+
+			now := time.Now()
+			sim := &GPSSimulator{
+				config:         config,
+				currentSpeed:   config.Speed,
+				currentCourse:  config.Course,
+				lastUpdateTime: now,
+			}
+
+			// Test multiple updates to check variation range
+			speedMin, speedMax := tt.baseSpeed, tt.baseSpeed
+			courseMin, courseMax := tt.baseCourse, tt.baseCourse
+
+			for i := 0; i < 50; i++ { // Run multiple times to test range
+				sim.updateSpeedAndCourse()
+
+				if sim.currentSpeed < speedMin {
+					speedMin = sim.currentSpeed
+				}
+				if sim.currentSpeed > speedMax {
+					speedMax = sim.currentSpeed
+				}
+
+				if sim.currentCourse < courseMin {
+					courseMin = sim.currentCourse
+				}
+				if sim.currentCourse > courseMax {
+					courseMax = sim.currentCourse
+				}
+			}
+
+			// Check that variations are within expected ranges
+			if speedMin < tt.expectedSpeedRange[0] || speedMax > tt.expectedSpeedRange[1] {
+				t.Errorf("Speed range [%.1f, %.1f] outside expected [%.1f, %.1f]",
+					speedMin, speedMax, tt.expectedSpeedRange[0], tt.expectedSpeedRange[1])
+			}
+
+			if courseMin < tt.expectedCourseRange[0] || courseMax > tt.expectedCourseRange[1] {
+				t.Errorf("Course range [%.1f, %.1f] outside expected [%.1f, %.1f]",
+					courseMin, courseMax, tt.expectedCourseRange[0], tt.expectedCourseRange[1])
+			}
+
+			// Speed should never be negative
+			if speedMin < 0 {
+				t.Errorf("Speed should never be negative, got %.1f", speedMin)
+			}
+
+			// Course should be normalized to 0-359 range
+			if courseMin < 0 || courseMax >= 360 {
+				t.Errorf("Course should be in range [0, 360), got [%.1f, %.1f]", courseMin, courseMax)
+			}
+		})
 	}
 }
 

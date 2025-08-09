@@ -25,6 +25,8 @@ type Config struct {
 	Altitude       float64 // starting altitude in meters
 	Jitter         float64 // GPS jitter factor (0.0-1.0)
 	AltitudeJitter float64 // altitude jitter factor (0.0-1.0)
+	Speed          float64 // static speed in knots
+	Course         float64 // static course in degrees (0-359)
 	Satellites     int
 	TimeToLock     time.Duration
 	OutputRate     time.Duration
@@ -45,6 +47,8 @@ func main() {
 	flag.Float64Var(&config.Altitude, "altitude", 45.0, "Starting altitude in meters")
 	flag.Float64Var(&config.Jitter, "jitter", 0.5, "GPS position jitter factor (0.0=stable, 1.0=high jitter)")
 	flag.Float64Var(&config.AltitudeJitter, "altitude-jitter", 0.1, "Altitude jitter factor (0.0=stable, 1.0=high variation)")
+	flag.Float64Var(&config.Speed, "speed", 0.1, "Static speed in knots")
+	flag.Float64Var(&config.Course, "course", 0.0, "Static course in degrees (0-359)")
 	flag.IntVar(&config.Satellites, "satellites", 8, "Number of satellites to simulate (4-12)")
 	flag.DurationVar(&config.TimeToLock, "lock-time", 30*time.Second, "Time to GPS lock simulation")
 	flag.DurationVar(&config.OutputRate, "rate", 1*time.Second, "NMEA output rate")
@@ -93,6 +97,14 @@ func main() {
 		log.Fatal("Baud rate must be positive")
 	}
 
+	if config.Speed < 0.0 {
+		log.Fatal("Speed must be non-negative")
+	}
+
+	if config.Course < 0.0 || config.Course >= 360.0 {
+		log.Fatal("Course must be between 0.0 and 359.9 degrees")
+	}
+
 	// Setup output writer (serial port or stdout)
 	var nmeaWriter io.Writer = os.Stdout
 	var serialPort serial.Port
@@ -125,6 +137,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Wandering radius: %.1f meters\n", config.Radius)
 		fmt.Fprintf(os.Stderr, "GPS jitter: %.1f (%.0f%% jitter)\n", config.Jitter, config.Jitter*100)
 		fmt.Fprintf(os.Stderr, "Altitude jitter: %.1f (%.0f%% variation)\n", config.AltitudeJitter, config.AltitudeJitter*100)
+		fmt.Fprintf(os.Stderr, "Speed: %.1f knots\n", config.Speed)
+		fmt.Fprintf(os.Stderr, "Course: %.1f degrees\n", config.Course)
 		fmt.Fprintf(os.Stderr, "Satellites: %d\n", config.Satellites)
 		fmt.Fprintf(os.Stderr, "Time to lock: %v\n", config.TimeToLock)
 		fmt.Fprintf(os.Stderr, "Output rate: %v\n", config.OutputRate)

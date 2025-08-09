@@ -16,6 +16,8 @@ func TestConfig(t *testing.T) {
 		Altitude:       45.0,
 		Jitter:         0.5,
 		AltitudeJitter: 0.1,
+		Speed:          5.0,
+		Course:         90.0,
 		Satellites:     8,
 		TimeToLock:     30 * time.Second,
 		OutputRate:     1 * time.Second,
@@ -42,6 +44,12 @@ func TestConfig(t *testing.T) {
 	}
 	if config.AltitudeJitter != 0.1 {
 		t.Errorf("Expected altitude jitter 0.1, got %f", config.AltitudeJitter)
+	}
+	if config.Speed != 5.0 {
+		t.Errorf("Expected speed 5.0, got %f", config.Speed)
+	}
+	if config.Course != 90.0 {
+		t.Errorf("Expected course 90.0, got %f", config.Course)
 	}
 	if config.Satellites != 8 {
 		t.Errorf("Expected satellites 8, got %d", config.Satellites)
@@ -130,27 +138,35 @@ func TestConfigValidation(t *testing.T) {
 		radius         float64
 		jitter         float64
 		altitudeJitter float64
+		speed          float64
+		course         float64
 		baudRate       int
 		shouldError    bool
 	}{
-		{"Valid config", 8, 100.0, 0.5, 0.1, 9600, false},
-		{"Valid config with quiet", 8, 100.0, 0.5, 0.1, 9600, false},
-		{"Min satellites", 4, 100.0, 0.5, 0.1, 9600, false},
-		{"Max satellites", 12, 100.0, 0.5, 0.1, 9600, false},
-		{"Too few satellites", 3, 100.0, 0.5, 0.1, 9600, true},
-		{"Too many satellites", 13, 100.0, 0.5, 0.1, 9600, true},
-		{"Negative radius", 8, -1.0, 0.5, 0.1, 9600, true},
-		{"Zero radius", 8, 0.0, 0.5, 0.1, 9600, false},
-		{"Min jitter", 8, 100.0, 0.0, 0.1, 9600, false},
-		{"Max jitter", 8, 100.0, 1.0, 0.1, 9600, false},
-		{"Negative jitter", 8, 100.0, -0.1, 0.1, 9600, true},
-		{"High jitter", 8, 100.0, 1.1, 0.1, 9600, true},
-		{"Min altitude jitter", 8, 100.0, 0.5, 0.0, 9600, false},
-		{"Max altitude jitter", 8, 100.0, 0.5, 1.0, 9600, false},
-		{"Negative altitude jitter", 8, 100.0, 0.5, -0.1, 9600, true},
-		{"High altitude jitter", 8, 100.0, 0.5, 1.1, 9600, true},
-		{"Zero baud rate", 8, 100.0, 0.5, 0.1, 0, true},
-		{"Negative baud rate", 8, 100.0, 0.5, 0.1, -9600, true},
+		{"Valid config", 8, 100.0, 0.5, 0.1, 10.0, 90.0, 9600, false},
+		{"Valid config with quiet", 8, 100.0, 0.5, 0.1, 10.0, 90.0, 9600, false},
+		{"Min satellites", 4, 100.0, 0.5, 0.1, 10.0, 90.0, 9600, false},
+		{"Max satellites", 12, 100.0, 0.5, 0.1, 10.0, 90.0, 9600, false},
+		{"Too few satellites", 3, 100.0, 0.5, 0.1, 10.0, 90.0, 9600, true},
+		{"Too many satellites", 13, 100.0, 0.5, 0.1, 10.0, 90.0, 9600, true},
+		{"Negative radius", 8, -1.0, 0.5, 0.1, 10.0, 90.0, 9600, true},
+		{"Zero radius", 8, 0.0, 0.5, 0.1, 10.0, 90.0, 9600, false},
+		{"Min jitter", 8, 100.0, 0.0, 0.1, 10.0, 90.0, 9600, false},
+		{"Max jitter", 8, 100.0, 1.0, 0.1, 10.0, 90.0, 9600, false},
+		{"Negative jitter", 8, 100.0, -0.1, 0.1, 10.0, 90.0, 9600, true},
+		{"High jitter", 8, 100.0, 1.1, 0.1, 10.0, 90.0, 9600, true},
+		{"Min altitude jitter", 8, 100.0, 0.5, 0.0, 10.0, 90.0, 9600, false},
+		{"Max altitude jitter", 8, 100.0, 0.5, 1.0, 10.0, 90.0, 9600, false},
+		{"Negative altitude jitter", 8, 100.0, 0.5, -0.1, 10.0, 90.0, 9600, true},
+		{"High altitude jitter", 8, 100.0, 0.5, 1.1, 10.0, 90.0, 9600, true},
+		{"Zero speed", 8, 100.0, 0.5, 0.1, 0.0, 90.0, 9600, false},
+		{"Negative speed", 8, 100.0, 0.5, 0.1, -1.0, 90.0, 9600, true},
+		{"Min course", 8, 100.0, 0.5, 0.1, 10.0, 0.0, 9600, false},
+		{"Max course", 8, 100.0, 0.5, 0.1, 10.0, 359.9, 9600, false},
+		{"High course", 8, 100.0, 0.5, 0.1, 10.0, 360.0, 9600, true},
+		{"Negative course", 8, 100.0, 0.5, 0.1, 10.0, -1.0, 9600, true},
+		{"Zero baud rate", 8, 100.0, 0.5, 0.1, 10.0, 90.0, 0, true},
+		{"Negative baud rate", 8, 100.0, 0.5, 0.1, 10.0, 90.0, -9600, true},
 	}
 
 	for _, tc := range testCases {
@@ -160,6 +176,8 @@ func TestConfigValidation(t *testing.T) {
 				Radius:         tc.radius,
 				Jitter:         tc.jitter,
 				AltitudeJitter: tc.altitudeJitter,
+				Speed:          tc.speed,
+				Course:         tc.course,
 				BaudRate:       tc.baudRate,
 			}
 
@@ -179,6 +197,12 @@ func TestConfigValidation(t *testing.T) {
 				hasError = true
 			}
 			if config.BaudRate <= 0 {
+				hasError = true
+			}
+			if config.Speed < 0.0 {
+				hasError = true
+			}
+			if config.Course < 0.0 || config.Course >= 360.0 {
 				hasError = true
 			}
 

@@ -44,7 +44,7 @@ func (s *GPSSimulator) generateGGA(timestamp time.Time) string {
 	// Quality indicator: 1 = GPS fix
 	quality := "1"
 	numSats := fmt.Sprintf("%02d", len(s.satellites))
-	hdop := "1.2"      // Horizontal dilution of precision
+	hdop := "1.2"                                 // Horizontal dilution of precision
 	altitude := fmt.Sprintf("%.1f", s.currentAlt) // Current altitude above mean sea level
 	altUnit := "M"
 	geoidSep := "0.0" // Geoidal separation
@@ -92,12 +92,12 @@ func (s *GPSSimulator) generateRMC(timestamp time.Time) string {
 		lonHem = "W"
 	}
 
-	status := "A"   // A = Active, V = Void
-	speed := "0.1"  // Speed over ground in knots
-	course := "0.0" // Course over ground in degrees
-	magVar := ""    // Magnetic variation
-	magVarDir := "" // Direction of magnetic variation
-	mode := "A"     // A = Autonomous, D = DGPS, E = DR
+	status := "A"                                  // A = Active, V = Void
+	speed := fmt.Sprintf("%.1f", s.currentSpeed)   // Speed over ground in knots (with jitter applied)
+	course := fmt.Sprintf("%.1f", s.currentCourse) // Course over ground in degrees (with jitter applied)
+	magVar := ""                                   // Magnetic variation
+	magVarDir := ""                                // Direction of magnetic variation
+	mode := "A"                                    // A = Autonomous, D = DGPS, E = DR
 
 	sentence := fmt.Sprintf("$GPRMC,%s,%s,%02d%07.4f,%s,%03d%07.4f,%s,%s,%s,%s,%s,%s,%s",
 		timeStr, status,
