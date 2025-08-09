@@ -14,6 +14,7 @@ type GPX struct {
 	Creator string   `xml:"creator,attr"`
 	Xmlns   string   `xml:"xmlns,attr"`
 	Track   Track    `xml:"trk"`
+	Routes  []Route  `xml:"rte"`
 }
 
 // Track represents a GPX track
@@ -29,6 +30,20 @@ type TrackSegment struct {
 
 // TrackPoint represents a single point in a GPX track
 type TrackPoint struct {
+	Lat       float64   `xml:"lat,attr"`
+	Lon       float64   `xml:"lon,attr"`
+	Elevation float64   `xml:"ele"`
+	Time      time.Time `xml:"time"`
+}
+
+// Route represents a GPX route
+type Route struct {
+	Name        string       `xml:"name"`
+	RoutePoints []RoutePoint `xml:"rtept"`
+}
+
+// RoutePoint represents a single point in a GPX route
+type RoutePoint struct {
 	Lat       float64   `xml:"lat,attr"`
 	Lon       float64   `xml:"lon,attr"`
 	Elevation float64   `xml:"ele"`
@@ -136,4 +151,45 @@ func (w *GPXWriter) Close() error {
 // GetTrackPointCount returns the number of track points currently stored
 func (w *GPXWriter) GetTrackPointCount() int {
 	return len(w.gpx.Track.TrackSegment.TrackPoints)
+}
+
+// ReadGPXFile reads and parses a GPX file, returning the track points
+func ReadGPXFile(filename string) ([]TrackPoint, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open GPX file %s: %v", filename, err)
+	}
+	defer file.Close()
+
+	var gpx GPX
+	decoder := xml.NewDecoder(file)
+	err = decoder.Decode(&gpx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse GPX file %s: %v", filename, err)
+	}
+
+	var points []TrackPoint
+
+	// Try to get points from tracks first
+	if len(gpx.Track.TrackSegment.TrackPoints) > 0 {
+		points = gpx.Track.TrackSegment.TrackPoints
+	} else if len(gpx.Routes) > 0 && len(gpx.Routes[0].RoutePoints) > 0 {
+		// Convert route points to track points
+		routePoints := gpx.Routes[0].RoutePoints
+		points = make([]TrackPoint, len(routePoints))
+		for i, rp := range routePoints {
+			points[i] = TrackPoint{
+				Lat:       rp.Lat,
+				Lon:       rp.Lon,
+				Elevation: rp.Elevation,
+				Time:      rp.Time,
+			}
+		}
+	}
+
+	if len(points) == 0 {
+		return nil, fmt.Errorf("no track points or route points found in GPX file %s", filename)
+	}
+
+	return points, nil
 }
