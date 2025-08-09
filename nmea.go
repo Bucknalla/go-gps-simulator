@@ -183,3 +183,40 @@ func (s *GPSSimulator) generateGSV() []string {
 
 	return sentences
 }
+
+// generateVTG generates a VTG (Track Made Good and Ground Speed) sentence
+func (s *GPSSimulator) generateVTG() string {
+	// Course over ground (true)
+	courseTrue := fmt.Sprintf("%.1f", s.currentCourse)
+	courseTrueRef := "T" // T = True
+
+	// Course over ground (magnetic) - we'll leave this empty as we don't simulate magnetic variation
+	courseMagnetic := ""
+	courseMagneticRef := "M" // M = Magnetic
+
+	// Speed over ground in knots
+	speedKnots := fmt.Sprintf("%.1f", s.currentSpeed)
+	speedKnotsUnit := "N" // N = Knots
+
+	// Speed over ground in kilometers per hour
+	// 1 knot = 1.852 km/h
+	speedKmh := fmt.Sprintf("%.1f", s.currentSpeed*1.852)
+	speedKmhUnit := "K" // K = Kilometers per hour
+
+	mode := "A" // A = Autonomous, D = DGPS, E = DR
+
+	sentence := fmt.Sprintf("$GPVTG,%s,%s,%s,%s,%s,%s,%s,%s,%s",
+		courseTrue, courseTrueRef,
+		courseMagnetic, courseMagneticRef,
+		speedKnots, speedKnotsUnit,
+		speedKmh, speedKmhUnit,
+		mode)
+
+	return formatNMEA(sentence)
+}
+
+// generateNoFixVTG generates a VTG sentence when there's no GPS fix
+func (s *GPSSimulator) generateNoFixVTG() string {
+	sentence := "$GPVTG,,,,,,,,,N" // N = Not valid
+	return formatNMEA(sentence)
+}
