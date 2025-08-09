@@ -220,3 +220,65 @@ func (s *GPSSimulator) generateNoFixVTG() string {
 	sentence := "$GPVTG,,,,,,,,,N" // N = Not valid
 	return formatNMEA(sentence)
 }
+
+// generateGLL generates a GLL (Geographic Position - Latitude/Longitude) sentence
+func (s *GPSSimulator) generateGLL(timestamp time.Time) string {
+	utcTime := timestamp.UTC()
+	timeStr := fmt.Sprintf("%02d%02d%02d.%02d",
+		utcTime.Hour(), utcTime.Minute(), utcTime.Second(), utcTime.Nanosecond()/10000000) // HHMMSS.SS
+
+	// Convert coordinates to NMEA format (DDMM.MMMMM)
+	latDeg := int(math.Abs(s.currentLat))
+	latMin := (math.Abs(s.currentLat) - float64(latDeg)) * 60
+	latHem := "N"
+	if s.currentLat < 0 {
+		latHem = "S"
+	}
+
+	lonDeg := int(math.Abs(s.currentLon))
+	lonMin := (math.Abs(s.currentLon) - float64(lonDeg)) * 60
+	lonHem := "E"
+	if s.currentLon < 0 {
+		lonHem = "W"
+	}
+
+	status := "A" // A = Data valid, V = Data invalid
+	mode := "A"   // A = Autonomous, D = DGPS, E = DR
+
+	sentence := fmt.Sprintf("$GPGLL,%02d%07.4f,%s,%03d%07.4f,%s,%s,%s,%s",
+		latDeg, latMin, latHem,
+		lonDeg, lonMin, lonHem,
+		timeStr, status, mode)
+
+	return formatNMEA(sentence)
+}
+
+// generateNoFixGLL generates a GLL sentence when there's no GPS fix
+func (s *GPSSimulator) generateNoFixGLL(timestamp time.Time) string {
+	utcTime := timestamp.UTC()
+	timeStr := fmt.Sprintf("%02d%02d%02d.%02d",
+		utcTime.Hour(), utcTime.Minute(), utcTime.Second(), utcTime.Nanosecond()/10000000) // HHMMSS.SS
+
+	sentence := fmt.Sprintf("$GPGLL,,,,,%s,V,N", timeStr) // V = Invalid, N = Not valid
+	return formatNMEA(sentence)
+}
+
+// generateZDA generates a ZDA (UTC Date and Time) sentence
+func (s *GPSSimulator) generateZDA(timestamp time.Time) string {
+	utcTime := timestamp.UTC()
+
+	timeStr := fmt.Sprintf("%02d%02d%02d.%02d",
+		utcTime.Hour(), utcTime.Minute(), utcTime.Second(), utcTime.Nanosecond()/10000000) // HHMMSS.SS
+	day := fmt.Sprintf("%02d", utcTime.Day())
+	month := fmt.Sprintf("%02d", utcTime.Month())
+	year := fmt.Sprintf("%04d", utcTime.Year())
+
+	// Local zone hours and minutes (we'll use UTC, so both are 00)
+	localZoneHours := "00"
+	localZoneMinutes := "00"
+
+	sentence := fmt.Sprintf("$GPZDA,%s,%s,%s,%s,%s,%s",
+		timeStr, day, month, year, localZoneHours, localZoneMinutes)
+
+	return formatNMEA(sentence)
+}

@@ -372,6 +372,9 @@ func (s *GPSSimulator) outputNMEA() {
 		// Output RMC sentence (Recommended Minimum)
 		fmt.Fprint(s.nmeaWriter, s.generateRMC(timestamp))
 
+		// Output GLL sentence (Geographic Position - Latitude/Longitude)
+		fmt.Fprint(s.nmeaWriter, s.generateGLL(timestamp))
+
 		// Output VTG sentence (Track Made Good and Ground Speed)
 		fmt.Fprint(s.nmeaWriter, s.generateVTG())
 
@@ -383,10 +386,14 @@ func (s *GPSSimulator) outputNMEA() {
 		for _, sentence := range gsv {
 			fmt.Fprint(s.nmeaWriter, sentence)
 		}
+
+		// Output ZDA sentence (UTC Date and Time)
+		fmt.Fprint(s.nmeaWriter, s.generateZDA(timestamp))
 	} else {
 		// Output sentences indicating no fix
 		fmt.Fprint(s.nmeaWriter, s.generateNoFixGGA(timestamp))
 		fmt.Fprint(s.nmeaWriter, s.generateNoFixRMC(timestamp))
+		fmt.Fprint(s.nmeaWriter, s.generateNoFixGLL(timestamp))
 		fmt.Fprint(s.nmeaWriter, s.generateNoFixVTG())
 	}
 

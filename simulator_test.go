@@ -781,12 +781,21 @@ func TestOutputNMEA(t *testing.T) {
 	if !strings.Contains(output, "$GPRMC,") {
 		t.Error("Output should contain RMC sentence when not locked")
 	}
-	// Should not contain GSA or GSV when not locked
+	if !strings.Contains(output, "$GPGLL,") {
+		t.Error("Output should contain GLL sentence when not locked")
+	}
+	if !strings.Contains(output, "$GPVTG,") {
+		t.Error("Output should contain VTG sentence when not locked")
+	}
+	// Should not contain GSA, GSV, or ZDA when not locked
 	if strings.Contains(output, "$GPGSA,") {
 		t.Error("Output should not contain GSA sentence when not locked")
 	}
 	if strings.Contains(output, "$GPGSV,") {
 		t.Error("Output should not contain GSV sentence when not locked")
+	}
+	if strings.Contains(output, "$GPZDA,") {
+		t.Error("Output should not contain ZDA sentence when not locked")
 	}
 
 	// Test output when locked
@@ -796,7 +805,7 @@ func TestOutputNMEA(t *testing.T) {
 	output = buffer.String()
 
 	// Should contain all sentence types
-	expectedSentences := []string{"$GPGGA,", "$GPRMC,", "$GPGSA,", "$GPGSV,"}
+	expectedSentences := []string{"$GPGGA,", "$GPRMC,", "$GPGLL,", "$GPVTG,", "$GPGSA,", "$GPGSV,", "$GPZDA,"}
 	for _, sentence := range expectedSentences {
 		if !strings.Contains(output, sentence) {
 			t.Errorf("Output should contain %s sentence when locked", sentence)
@@ -1757,6 +1766,181 @@ func TestUpdateSpeedAndCourseEdgeCases(t *testing.T) {
 					t.Errorf("High jitter (%.2f) produced unexpectedly small speed range: %.2f", jitter, speedRange)
 				}
 			})
+		}
+	})
+}
+
+// TestDeterministicBoundaryConditions ensures consistent coverage of boundary conditions
+// that are normally hit randomly, eliminating coverage variation between test runs
+func TestDeterministicBoundaryConditions(t *testing.T) {
+	t.Run("Speed negative boundary", func(t *testing.T) {
+		config := createTestConfig()
+		config.Speed = 0.1  // Very low speed
+		config.Jitter = 0.9 // High jitter to force negative speeds
+		buffer := &bytes.Buffer{}
+		sim, err := NewGPSSimulator(config, buffer)
+		if err != nil {
+			t.Fatalf("Failed to create GPS simulator: %v", err)
+		}
+
+		// Force a scenario where speed goes negative
+		sim.config.Speed = 1.0
+		sim.currentSpeed = 1.0
+
+		// Manually set a large negative delta to force the boundary condition
+		originalSpeed := sim.currentSpeed
+		sim.currentSpeed = -0.5 // Force negative speed
+
+		// Call updateSpeedAndCourse to trigger the boundary check
+		sim.updateSpeedAndCourse()
+
+		// The speed should be corrected to 0 or positive
+		if sim.currentSpeed < 0 {
+			t.Errorf("Speed should not be negative after update, got %.2f", sim.currentSpeed)
+		}
+
+		// Reset for normal operation
+		sim.currentSpeed = originalSpeed
+	})
+
+	t.Run("Course normalization boundaries", func(t *testing.T) {
+		config := createTestConfig()
+		buffer := &bytes.Buffer{}
+		sim, err := NewGPSSimulator(config, buffer)
+		if err != nil {
+			t.Fatalf("Failed to create GPS simulator: %v", err)
+		}
+
+		// Test negative course normalization
+		sim.currentCourse = -10.0
+		sim.updateSpeedAndCourse()
+		if sim.currentCourse < 0 || sim.currentCourse >= 360 {
+			t.Errorf("Course should be normalized to 0-359 range, got %.2f", sim.currentCourse)
+		}
+
+		// Test course >= 360 normalization
+		sim.currentCourse = 370.0
+		sim.updateSpeedAndCourse()
+		if sim.currentCourse < 0 || sim.currentCourse >= 360 {
+			t.Errorf("Course should be normalized to 0-359 range, got %.2f", sim.currentCourse)
+		}
+	})
+
+	t.Run("Satellite elevation boundaries", func(t *testing.T) {
+		config := createTestConfig()
+		buffer := &bytes.Buffer{}
+		sim, err := NewGPSSimulator(config, buffer)
+		if err != nil {
+			t.Fatalf("Failed to create GPS simulator: %v", err)
+		}
+
+		// Force satellites to boundary conditions
+		for i := range sim.satellites {
+			// Test low elevation boundary
+			sim.satellites[i].Elevation = 3 // Below minimum of 5
+			sim.updateSatellites()
+			if sim.satellites[i].Elevation < 5 {
+				t.Errorf("Satellite %d elevation should be at least 5, got %d", i, sim.satellites[i].Elevation)
+			}
+
+			// Test high elevation boundary
+			sim.satellites[i].Elevation = 87 // Above maximum of 85
+			sim.updateSatellites()
+			if sim.satellites[i].Elevation > 85 {
+				t.Errorf("Satellite %d elevation should be at most 85, got %d", i, sim.satellites[i].Elevation)
+			}
+		}
+	})
+
+	t.Run("Satellite SNR boundaries", func(t *testing.T) {
+		config := createTestConfig()
+		buffer := &bytes.Buffer{}
+		sim, err := NewGPSSimulator(config, buffer)
+		if err != nil {
+			t.Fatalf("Failed to create GPS simulator: %v", err)
+		}
+
+		// Force satellites to SNR boundary conditions
+		for i := range sim.satellites {
+			// Test low SNR boundary
+			sim.satellites[i].SNR = 10 // Below minimum of 15
+			sim.updateSatellites()
+			if sim.satellites[i].SNR < 15 {
+				t.Errorf("Satellite %d SNR should be at least 15, got %d", i, sim.satellites[i].SNR)
+			}
+
+			// Test high SNR boundary
+			sim.satellites[i].SNR = 60 // Above maximum of 55
+			sim.updateSatellites()
+			if sim.satellites[i].SNR > 55 {
+				t.Errorf("Satellite %d SNR should be at most 55, got %d", i, sim.satellites[i].SNR)
+			}
+		}
+	})
+
+	t.Run("Altitude boundaries", func(t *testing.T) {
+		config := createTestConfig()
+		config.Altitude = 100.0     // Starting altitude
+		config.AltitudeJitter = 0.9 // High jitter to trigger boundaries
+		buffer := &bytes.Buffer{}
+		sim, err := NewGPSSimulator(config, buffer)
+		if err != nil {
+			t.Fatalf("Failed to create GPS simulator: %v", err)
+		}
+
+		// Test minimum altitude boundary (below sea level)
+		sim.currentAlt = -60.0 // Below -50.0 minimum
+		sim.updateAltitude()
+		if sim.currentAlt < -50.0 {
+			t.Errorf("Altitude should not go below -50m (sea level limit), got %.2f", sim.currentAlt)
+		}
+
+		// Test minimum relative to starting altitude
+		sim.config.Altitude = 200.0 // High starting altitude
+		sim.currentAlt = 80.0       // Below (200 - 100) = 100m minimum
+		sim.updateAltitude()
+		if sim.currentAlt < 100.0 {
+			t.Errorf("Altitude should not go below starting-100m, got %.2f", sim.currentAlt)
+		}
+
+		// Test maximum altitude boundary
+		sim.currentAlt = 750.0 // Above (200 + 500) = 700m maximum
+		sim.updateAltitude()
+		if sim.currentAlt > 700.0 {
+			t.Errorf("Altitude should not exceed starting+500m, got %.2f", sim.currentAlt)
+		}
+
+		// Test the sea level boundary condition specifically
+		sim.config.Altitude = 10.0 // Low starting altitude
+		sim.currentAlt = -60.0     // This should trigger the -50.0 sea level minimum
+		sim.updateAltitude()
+		if sim.currentAlt < -50.0 {
+			t.Errorf("Sea level boundary should prevent altitude below -50m, got %.2f", sim.currentAlt)
+		}
+	})
+
+	t.Run("Position update edge cases", func(t *testing.T) {
+		config := createTestConfig()
+		config.Jitter = 0.9 // High jitter
+		config.Speed = 50.0 // High speed
+		buffer := &bytes.Buffer{}
+		sim, err := NewGPSSimulator(config, buffer)
+		if err != nil {
+			t.Fatalf("Failed to create GPS simulator: %v", err)
+		}
+
+		// Test with zero speed to ensure position doesn't change
+		originalLat := sim.currentLat
+		originalLon := sim.currentLon
+		sim.currentSpeed = 0.0 // Zero speed should result in no position change
+
+		sim.updatePosition()
+
+		// With zero speed, position should remain unchanged (within floating point precision)
+		latDiff := math.Abs(sim.currentLat - originalLat)
+		lonDiff := math.Abs(sim.currentLon - originalLon)
+		if latDiff > 0.000001 || lonDiff > 0.000001 {
+			t.Errorf("Position should not change significantly with zero speed, lat diff: %f, lon diff: %f", latDiff, lonDiff)
 		}
 	})
 }

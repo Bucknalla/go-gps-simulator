@@ -743,3 +743,286 @@ func TestNMEAChecksumValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestGenerateGLL(t *testing.T) {
+	sim := createTestSimulator()
+	testTime := time.Date(2024, 1, 15, 12, 34, 56, 123000000, time.UTC) // With milliseconds
+
+	result := sim.generateGLL(testTime)
+
+	// Check basic format
+	if !strings.HasPrefix(result, "$GPGLL,") {
+		t.Errorf("generateGLL should start with '$GPGLL,', got: %s", result)
+	}
+
+	if !strings.HasSuffix(result, "\r\n") {
+		t.Errorf("generateGLL should end with \\r\\n, got: %s", result)
+	}
+
+	// Check that it contains a checksum
+	if !strings.Contains(result, "*") {
+		t.Errorf("generateGLL should contain checksum separator '*', got: %s", result)
+	}
+
+	// Check time format (should be HHMMSS.SS)
+	if !strings.Contains(result, "123456.12") {
+		t.Errorf("generateGLL should contain time '123456.12', got: %s", result)
+	}
+
+	// Parse the GLL sentence
+	parts := strings.Split(result, ",")
+	if len(parts) < 8 {
+		t.Errorf("generateGLL should have at least 8 comma-separated fields, got %d", len(parts))
+	}
+
+	// Check that coordinates are present
+	if len(parts) > 1 && parts[1] == "" {
+		t.Errorf("generateGLL latitude field should not be empty")
+	}
+	if len(parts) > 3 && parts[3] == "" {
+		t.Errorf("generateGLL longitude field should not be empty")
+	}
+
+	// Check hemisphere indicators
+	if len(parts) > 2 && parts[2] != "N" && parts[2] != "S" {
+		t.Errorf("generateGLL latitude hemisphere should be 'N' or 'S', got: %s", parts[2])
+	}
+	if len(parts) > 4 && parts[4] != "E" && parts[4] != "W" {
+		t.Errorf("generateGLL longitude hemisphere should be 'E' or 'W', got: %s", parts[4])
+	}
+
+	// Check status (should be "A" for active)
+	if len(parts) > 6 && parts[6] != "A" {
+		t.Errorf("generateGLL status should be 'A', got: %s", parts[6])
+	}
+
+	// Check mode (should be "A" for autonomous)
+	sentencePart := strings.Split(parts[7], "*")[0] // Remove checksum
+	if sentencePart != "A" {
+		t.Errorf("generateGLL mode should be 'A', got: %s", sentencePart)
+	}
+}
+
+func TestGenerateNoFixGLL(t *testing.T) {
+	sim := createTestSimulator()
+	testTime := time.Date(2024, 1, 15, 12, 34, 56, 123000000, time.UTC)
+
+	result := sim.generateNoFixGLL(testTime)
+
+	// Check basic format
+	if !strings.HasPrefix(result, "$GPGLL,") {
+		t.Errorf("generateNoFixGLL should start with '$GPGLL,', got: %s", result)
+	}
+
+	if !strings.HasSuffix(result, "\r\n") {
+		t.Errorf("generateNoFixGLL should end with \\r\\n, got: %s", result)
+	}
+
+	// Check that coordinate fields are empty
+	parts := strings.Split(result, ",")
+	if len(parts) > 1 && parts[1] != "" {
+		t.Errorf("generateNoFixGLL latitude should be empty, got: %s", parts[1])
+	}
+	if len(parts) > 3 && parts[3] != "" {
+		t.Errorf("generateNoFixGLL longitude should be empty, got: %s", parts[3])
+	}
+
+	// Check status (should be "V" for invalid) - field index 6
+	if len(parts) > 6 && parts[6] != "V" {
+		t.Errorf("generateNoFixGLL status should be 'V', got: %s", parts[6])
+	}
+
+	// Check mode (should be "N" for not valid) - field index 7
+	if len(parts) > 7 {
+		sentencePart := strings.Split(parts[7], "*")[0] // Remove checksum
+		if sentencePart != "N" {
+			t.Errorf("generateNoFixGLL mode should be 'N', got: %s", sentencePart)
+		}
+	}
+}
+
+func TestGenerateZDA(t *testing.T) {
+	sim := createTestSimulator()
+	testTime := time.Date(2024, 1, 15, 12, 34, 56, 123000000, time.UTC)
+
+	result := sim.generateZDA(testTime)
+
+	// Check basic format
+	if !strings.HasPrefix(result, "$GPZDA,") {
+		t.Errorf("generateZDA should start with '$GPZDA,', got: %s", result)
+	}
+
+	if !strings.HasSuffix(result, "\r\n") {
+		t.Errorf("generateZDA should end with \\r\\n, got: %s", result)
+	}
+
+	// Check that it contains a checksum
+	if !strings.Contains(result, "*") {
+		t.Errorf("generateZDA should contain checksum separator '*', got: %s", result)
+	}
+
+	// Parse the ZDA sentence
+	sentencePart := strings.Split(result, "*")[0] // Remove checksum part
+	parts := strings.Split(sentencePart, ",")
+	if len(parts) < 7 {
+		t.Errorf("generateZDA should have at least 7 comma-separated fields, got %d", len(parts))
+	}
+
+	// Check time format (should be HHMMSS.SS)
+	if len(parts) > 1 && parts[1] != "123456.12" {
+		t.Errorf("generateZDA should contain time '123456.12', got: %s", parts[1])
+	}
+
+	// Check day
+	if len(parts) > 2 && parts[2] != "15" {
+		t.Errorf("generateZDA should contain day '15', got: %s", parts[2])
+	}
+
+	// Check month
+	if len(parts) > 3 && parts[3] != "01" {
+		t.Errorf("generateZDA should contain month '01', got: %s", parts[3])
+	}
+
+	// Check year
+	if len(parts) > 4 && parts[4] != "2024" {
+		t.Errorf("generateZDA should contain year '2024', got: %s", parts[4])
+	}
+
+	// Check local zone hours (should be "00" for UTC)
+	if len(parts) > 5 && parts[5] != "00" {
+		t.Errorf("generateZDA should contain local zone hours '00', got: %s", parts[5])
+	}
+
+	// Check local zone minutes (should be "00" for UTC)
+	if len(parts) > 6 && parts[6] != "00" {
+		t.Errorf("generateZDA should contain local zone minutes '00', got: %s", parts[6])
+	}
+}
+
+func TestGLLCoordinateFormats(t *testing.T) {
+	tests := []struct {
+		name         string
+		lat          float64
+		lon          float64
+		expectLatHem string
+		expectLonHem string
+	}{
+		{
+			name:         "Northern/Eastern hemisphere",
+			lat:          37.7749,
+			lon:          122.4194,
+			expectLatHem: "N",
+			expectLonHem: "E",
+		},
+		{
+			name:         "Southern/Western hemisphere",
+			lat:          -33.8688,
+			lon:          -151.2093,
+			expectLatHem: "S",
+			expectLonHem: "W",
+		},
+		{
+			name:         "Zero coordinates",
+			lat:          0.0,
+			lon:          0.0,
+			expectLatHem: "N",
+			expectLonHem: "E",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sim := createTestSimulator()
+			sim.currentLat = tt.lat
+			sim.currentLon = tt.lon
+
+			testTime := time.Date(2024, 1, 15, 12, 34, 56, 0, time.UTC)
+			result := sim.generateGLL(testTime)
+
+			parts := strings.Split(result, ",")
+			if len(parts) < 5 {
+				t.Fatalf("GLL sentence should have at least 5 fields")
+			}
+
+			// Check hemisphere indicators
+			if parts[2] != tt.expectLatHem {
+				t.Errorf("Expected latitude hemisphere %s, got %s", tt.expectLatHem, parts[2])
+			}
+			if parts[4] != tt.expectLonHem {
+				t.Errorf("Expected longitude hemisphere %s, got %s", tt.expectLonHem, parts[4])
+			}
+
+			// For non-zero coordinates, check that coordinate fields are not empty
+			if tt.lat != 0.0 && parts[1] == "" {
+				t.Errorf("Latitude field should not be empty for non-zero latitude")
+			}
+			if tt.lon != 0.0 && parts[3] == "" {
+				t.Errorf("Longitude field should not be empty for non-zero longitude")
+			}
+		})
+	}
+}
+
+func TestZDADifferentTimes(t *testing.T) {
+	sim := createTestSimulator()
+
+	tests := []struct {
+		name          string
+		testTime      time.Time
+		expectedTime  string
+		expectedDay   string
+		expectedMonth string
+		expectedYear  string
+	}{
+		{
+			name:          "New Year's Day",
+			testTime:      time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			expectedTime:  "000000.00",
+			expectedDay:   "01",
+			expectedMonth: "01",
+			expectedYear:  "2024",
+		},
+		{
+			name:          "Leap year date",
+			testTime:      time.Date(2024, 2, 29, 23, 59, 59, 999000000, time.UTC),
+			expectedTime:  "235959.99",
+			expectedDay:   "29",
+			expectedMonth: "02",
+			expectedYear:  "2024",
+		},
+		{
+			name:          "End of year",
+			testTime:      time.Date(2023, 12, 31, 12, 30, 45, 500000000, time.UTC),
+			expectedTime:  "123045.50",
+			expectedDay:   "31",
+			expectedMonth: "12",
+			expectedYear:  "2023",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := sim.generateZDA(tt.testTime)
+
+			sentencePart := strings.Split(result, "*")[0]
+			parts := strings.Split(sentencePart, ",")
+
+			if len(parts) < 5 {
+				t.Fatalf("ZDA sentence should have at least 5 fields")
+			}
+
+			if parts[1] != tt.expectedTime {
+				t.Errorf("Expected time %s, got %s", tt.expectedTime, parts[1])
+			}
+			if parts[2] != tt.expectedDay {
+				t.Errorf("Expected day %s, got %s", tt.expectedDay, parts[2])
+			}
+			if parts[3] != tt.expectedMonth {
+				t.Errorf("Expected month %s, got %s", tt.expectedMonth, parts[3])
+			}
+			if parts[4] != tt.expectedYear {
+				t.Errorf("Expected year %s, got %s", tt.expectedYear, parts[4])
+			}
+		})
+	}
+}
