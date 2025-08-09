@@ -307,6 +307,9 @@ func (s *GPSSimulator) outputNMEA() {
 		// Output RMC sentence (Recommended Minimum)
 		fmt.Fprint(s.nmeaWriter, s.generateRMC(timestamp))
 
+		// Output VTG sentence (Track Made Good and Ground Speed)
+		fmt.Fprint(s.nmeaWriter, s.generateVTG())
+
 		// Output GSA sentence (GPS DOP and active satellites)
 		fmt.Fprint(s.nmeaWriter, s.generateGSA())
 
@@ -319,6 +322,7 @@ func (s *GPSSimulator) outputNMEA() {
 		// Output sentences indicating no fix
 		fmt.Fprint(s.nmeaWriter, s.generateNoFixGGA(timestamp))
 		fmt.Fprint(s.nmeaWriter, s.generateNoFixRMC(timestamp))
+		fmt.Fprint(s.nmeaWriter, s.generateNoFixVTG())
 	}
 
 	// No extra blank lines - NMEA sentences should be continuous

@@ -568,6 +568,145 @@ func TestCoordinateConversion(t *testing.T) {
 	}
 }
 
+func TestGenerateVTG(t *testing.T) {
+	sim := createTestSimulator()
+
+	result := sim.generateVTG()
+
+	// Check basic format
+	if !strings.HasPrefix(result, "$GPVTG,") {
+		t.Errorf("generateVTG should start with '$GPVTG,', got: %s", result)
+	}
+
+	if !strings.HasSuffix(result, "\r\n") {
+		t.Errorf("generateVTG should end with \\r\\n, got: %s", result)
+	}
+
+	// Split sentence and remove checksum part
+	sentencePart := strings.Split(result, "*")[0]
+	parts := strings.Split(sentencePart, ",")
+	if len(parts) < 10 {
+		t.Errorf("generateVTG should have at least 10 comma-separated fields, got %d", len(parts))
+	}
+
+	// Check that course is present (field 1)
+	if len(parts) > 1 && parts[1] == "" {
+		t.Errorf("generateVTG course field should not be empty")
+	}
+
+	// Check course reference (field 2) should be "T"
+	if len(parts) > 2 && parts[2] != "T" {
+		t.Errorf("generateVTG course reference should be 'T', got: %s", parts[2])
+	}
+
+	// Check magnetic reference (field 4) should be "M"
+	if len(parts) > 4 && parts[4] != "M" {
+		t.Errorf("generateVTG magnetic reference should be 'M', got: %s", parts[4])
+	}
+
+	// Check speed in knots is present (field 5)
+	if len(parts) > 5 && parts[5] == "" {
+		t.Errorf("generateVTG speed in knots should not be empty")
+	}
+
+	// Check knots unit (field 6) should be "N"
+	if len(parts) > 6 && parts[6] != "N" {
+		t.Errorf("generateVTG knots unit should be 'N', got: %s", parts[6])
+	}
+
+	// Check speed in km/h is present (field 7)
+	if len(parts) > 7 && parts[7] == "" {
+		t.Errorf("generateVTG speed in km/h should not be empty")
+	}
+
+	// Check km/h unit (field 8) should be "K"
+	if len(parts) > 8 && parts[8] != "K" {
+		t.Errorf("generateVTG km/h unit should be 'K', got: %s", parts[8])
+	}
+
+	// Check mode (field 9) should be "A"
+	if len(parts) > 9 && parts[9] != "A" {
+		t.Errorf("generateVTG mode should be 'A', got: %s", parts[9])
+	}
+}
+
+func TestGenerateNoFixVTG(t *testing.T) {
+	sim := createTestSimulator()
+
+	result := sim.generateNoFixVTG()
+
+	// Check basic format
+	if !strings.HasPrefix(result, "$GPVTG,") {
+		t.Errorf("generateNoFixVTG should start with '$GPVTG,', got: %s", result)
+	}
+
+	if !strings.HasSuffix(result, "\r\n") {
+		t.Errorf("generateNoFixVTG should end with \\r\\n, got: %s", result)
+	}
+
+	// Check that it ends with "N" for not valid
+	if !strings.Contains(result, ",N*") {
+		t.Errorf("generateNoFixVTG should contain ',N*' for not valid status, got: %s", result)
+	}
+
+	// Split sentence and remove checksum part
+	sentencePart := strings.Split(result, "*")[0]
+	parts := strings.Split(sentencePart, ",")
+	// Check that most fields are empty (no fix)
+	for i := 1; i < 9; i++ { // Fields 1-8 should be empty
+		if len(parts) > i && parts[i] != "" {
+			t.Errorf("generateNoFixVTG field %d should be empty, got: %s", i, parts[i])
+		}
+	}
+}
+
+func TestVTGSpeedConversion(t *testing.T) {
+	// Create simulator with known speed
+	config := Config{
+		Latitude:   37.7749,
+		Longitude:  -122.4194,
+		Speed:      10.0, // 10 knots
+		Course:     90.0, // 90 degrees
+		Satellites: 8,
+	}
+
+	now := time.Now()
+	sim := &GPSSimulator{
+		config:         config,
+		currentSpeed:   config.Speed,
+		currentCourse:  config.Course,
+		isLocked:       true,
+		lastUpdateTime: now,
+	}
+
+	result := sim.generateVTG()
+	// Split sentence and remove checksum part
+	sentencePart := strings.Split(result, "*")[0]
+	parts := strings.Split(sentencePart, ",")
+
+	if len(parts) < 8 {
+		t.Fatalf("VTG sentence should have at least 8 fields")
+	}
+
+	// Check speed in knots (should be 10.0)
+	expectedKnots := "10.0"
+	if parts[5] != expectedKnots {
+		t.Errorf("Expected speed in knots %s, got %s", expectedKnots, parts[5])
+	}
+
+	// Check speed in km/h (should be 10.0 * 1.852 = 18.52)
+	expectedKmh := "18.5" // Rounded to 1 decimal place
+	if parts[7] != expectedKmh {
+		t.Errorf("Expected speed in km/h %s, got %s", expectedKmh, parts[7])
+	}
+
+	// Check course (should be 90.0)
+	expectedCourse := "90.0"
+	if parts[1] != expectedCourse {
+		t.Errorf("Expected course %s, got %s", expectedCourse, parts[1])
+	}
+}
+
 func TestNMEAChecksumValidation(t *testing.T) {
 	sim := createTestSimulator()
 	testTime := time.Date(2024, 1, 15, 12, 34, 56, 0, time.UTC)
@@ -577,6 +716,7 @@ func TestNMEAChecksumValidation(t *testing.T) {
 		sim.generateGGA(testTime),
 		sim.generateRMC(testTime),
 		sim.generateGSA(),
+		sim.generateVTG(),
 	}
 
 	// Add GSV sentences
