@@ -1,0 +1,152 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  -
+    id: "gps-simulator-linux"
+    binary: gps-simulator
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.Commit={{.Commit}}
+      - -X main.BuildDate={{.Date}}
+
+  -
+    id: "gps-simulator"
+    binary: gps-simulator
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.Commit={{.Commit}}
+      - -X main.BuildDate={{.Date}}
+
+archives:
+  - name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+    - goos: windows
+      format: zip
+    - goos: linux
+      format: tar.gz
+    - goos: darwin
+      format: tar.gz
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - '^chore:'
+      - '^build:'
+
+nfpms:
+  -
+    id: gps_simulator_deb
+    package_name: gps-simulator
+    bindir: /usr/bin
+    vendor: GPS Simulator
+    homepage: https://github.com/Bucknalla/go-gps-simulator
+    maintainer: Alex Bucknall <alex@bucknall.net>
+    description: GPS NMEA0183 Simulator - Command-line tool for simulating GPS receiver output
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    contents:
+      - src: ./README.md
+        dst: /usr/share/doc/gps-simulator/README.md
+      - src: ./scripts/demo_gps.sh
+        dst: /usr/share/gps-simulator/scripts/demo_gps.sh
+        file_info:
+          mode: 0755
+      - src: ./scripts/watch_gps.sh
+        dst: /usr/share/gps-simulator/scripts/watch_gps.sh
+        file_info:
+          mode: 0755
+
+brews:
+  - repository:
+      owner: Bucknalla
+      name: homebrew-tools
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/Bucknalla/go-gps-simulator
+    description: GPS NMEA0183 Simulator - Command-line tool for simulating GPS receiver output
+    license: MIT
+    test: |
+      system "#{bin}/gps-simulator", "-version"
+    install: |
+      bin.install "gps-simulator"
+      pkgshare.install "scripts"
+
+release:
+  github:
+    owner: Bucknalla
+    name: go-gps-simulator
+  draft: false
+  prerelease: auto
+  name_template: "{{.ProjectName}} v{{.Version}}"
+  header: |
+    ## GPS NMEA0183 Simulator {{.Version}}
+
+    Cross-platform GPS simulator for testing and development.
+
+    ### Changes
+  footer: |
+    **Full Changelog**: https://github.com/Bucknalla/go-gps-simulator/compare/{{.PreviousTag}}...{{.Tag}}
+
+    ### Installation
+
+    Download the appropriate binary for your platform or use package managers:
+
+    #### Homebrew (macOS/Linux)
+    ```bash
+    brew install Bucknalla/tap/gps-simulator
+    ```
+
+    #### Debian/Ubuntu
+    ```bash
+    sudo dpkg -i gps-simulator_{{.Version}}_linux_amd64.deb
+    ```
+
+    #### Build from source
+    ```bash
+    go install github.com/Bucknalla/go-gps-simulator@{{.Tag}}
+    ```
+
+
