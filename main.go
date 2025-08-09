@@ -110,8 +110,12 @@ func main() {
 		log.Fatal("Course must be between 0.0 and 359.9 degrees")
 	}
 
-	// Handle GPX filename generation
+	// Handle GPX filename generation and validation
 	if config.GPXEnabled {
+		// Require duration when GPX is enabled
+		if config.Duration <= 0 {
+			log.Fatal("Duration greater than 0 must be specified when using -gpx flag (e.g., -duration 30s)")
+		}
 		// Always generate timestamp-based filename when -gpx flag is used
 		config.GPXFile = fmt.Sprintf("%s.gpx", time.Now().Format("20060102_150405"))
 	}

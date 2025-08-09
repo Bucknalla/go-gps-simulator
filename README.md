@@ -13,9 +13,11 @@ Designed for testing GPS-dependent applications, embedded systems development, o
 - **Configurable Output Rate**: Control how frequently NMEA sentences are output
 - **Serial Port Support**: Output NMEA data directly to serial devices
 - **Output Separation**: NMEA data and logging messages are separated (stdout vs stderr)
-- **Multiple NMEA Sentence Types**: Supports GGA, RMC, GSA, and GSV sentences
+- **Multiple NMEA Sentence Types**: Supports GGA, RMC, GSA, VTG, and GSV sentences
 - **Speed & Course Simulation**: Configurable static speed and course values in NMEA output
 - **Realistic Signal Simulation**: Dynamic satellite positions and signal strength
+- **GPX Track Generation**: Export GPS tracks to GPX files for analysis and visualization
+- **Duration Control**: Automatic simulation termination after specified time periods
 
 ## Installation
 
@@ -74,6 +76,10 @@ gps-simulator [options]
 | `-serial`          | string   | ""        | Serial port for NMEA output (e.g., /dev/ttyUSB0, COM1)   |
 | `-baud`            | int      | 9600      | Serial port baud rate                                    |
 | `-quiet`           | bool     | false     | Suppress informational messages (only output NMEA data)  |
+| `-gpx`             | bool     | false     | Generate GPX track file with timestamp-based filename    |
+| `-duration`        | duration | 0         | How long to run the simulation (e.g., 30s, 5m, 1h)      |
+
+**Note**: When using `-gpx`, the `-duration` flag is required.
 
 ### Examples
 
@@ -227,6 +233,58 @@ Quiet mode for piping to applications
 gps-simulator -quiet -rate 100ms | nmea_parser
 ```
 
+#### GPX Track Generation Examples
+
+Generate GPX track with automatic timestamp filename
+
+```bash
+gps-simulator -gpx -duration 5m -lock-time 10s
+```
+
+Boat journey simulation with GPX export
+
+```bash
+gps-simulator -gpx -lat 37.8080 -lon -122.4177 -radius 5000 -speed 8.5 -course 45 -jitter 0.3 -altitude 2.0 -duration 60s
+```
+
+Aircraft flight path with GPX
+
+```bash
+gps-simulator -gpx -lat 40.7128 -lon -74.0060 -altitude 10000 -speed 250 -course 90 -duration 30m -rate 5s
+```
+
+Hiking trail simulation
+
+```bash
+gps-simulator -gpx -lat 46.8182 -lon 8.2275 -altitude 2500 -speed 3.0 -radius 100 -duration 2h -rate 30s
+```
+
+#### Duration Control Examples
+
+Short test run (30 seconds)
+
+```bash
+gps-simulator -duration 30s -rate 1s
+```
+
+Extended simulation (2 hours)
+
+```bash
+gps-simulator -duration 2h -rate 10s
+```
+
+Quick GPS lock test (5 minutes)
+
+```bash
+gps-simulator -duration 5m -lock-time 5s -rate 500ms
+```
+
+Automated testing scenario
+
+```bash
+gps-simulator -gpx -duration 10m -quiet -lat 51.5074 -lon -0.1278 -speed 5.0
+```
+
 #### Live GPS Stream Viewing
 
 Quick Demo (Everything Automatic)
@@ -313,6 +371,15 @@ The simulator outputs the following NMEA0183 sentence types:
 - Realistic coordinate conversion (DDMM.MMMMM format)
 - UTC timestamp generation
 
+### GPX Track Generation
+
+- **Standard GPX 1.1 Format**: Industry-standard XML format compatible with most GPS applications
+- **Automatic Filename Generation**: Creates timestamped files (YYYYMMDD_HHMMSS.gpx) when using `-gpx` flag
+- **Complete Track Data**: Includes latitude, longitude, elevation, and UTC timestamps for each point
+- **Real-time Writing**: Track points are written during simulation for data safety
+- **Post-GPS Lock**: Only records track points after GPS lock is achieved for accurate data
+- **Duration Required**: The `-duration` flag must be specified when using `-gpx` to ensure controlled file size
+
 ## Development
 
 ### Helper Scripts
@@ -341,8 +408,16 @@ The simulator outputs the following NMEA0183 sentence types:
   - Configurable speed in knots via `-speed` flag
   - Configurable course in degrees (0-359) via `-course` flag
   - Properly integrated into RMC NMEA sentences
+- [x] **GPX Track Generation** - Export GPS simulation data to GPX files
+  - Standard GPX 1.1 XML format with complete track data
+  - Automatic timestamp-based filename generation
+  - Real-time track point recording during simulation
+  - Compatible with GPS analysis and mapping applications
+- [x] **Duration Control** - Automatic simulation termination
+  - Configurable simulation duration via `-duration` flag
+  - Supports various time formats (30s, 5m, 1h, etc.)
+  - Clean shutdown with proper GPX file closure
 - [ ] **Additional NMEA Sentences** - Expand sentence type support
-  - VTG (Course and Speed over Ground)
   - GLL (Geographic Position - Latitude/Longitude)
   - ZDA (Time and Date)
 - [ ] **Signal Quality Scenarios** - Simulate real-world GPS challenges
@@ -362,7 +437,7 @@ The simulator outputs the following NMEA0183 sentence types:
   - Constellation-specific NMEA sentences (GLGGA, GNGGA, etc.)
   - Different satellite ID ranges
 - [ ] **Predefined Routes** - Follow realistic movement patterns
-  - GPX file support for route following
+  - GPX file import for route following
   - City/highway driving patterns
   - Airport runway procedures
   - Maritime shipping lanes
