@@ -60,6 +60,9 @@ archives:
       format: tar.gz
     - goos: darwin
       format: tar.gz
+    files:
+      - README.md
+      - scripts/**/*
 
 checksum:
   name_template: 'checksums.txt'
