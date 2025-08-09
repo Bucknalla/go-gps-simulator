@@ -829,16 +829,12 @@ func TestGenerateNoFixGLL(t *testing.T) {
 
 	// Check status (should be "V" for invalid) - field index 7
 	if len(parts) > 7 && parts[7] != "V" {
-	// Check status (should be "V" for invalid) - field index 6
-	if len(parts) > 6 && parts[6] != "V" {
-		t.Errorf("generateNoFixGLL status should be 'V', got: %s", parts[6])
+		t.Errorf("generateNoFixGLL status should be 'V', got: %s", parts[7])
 	}
 
 	// Check mode (should be "N" for not valid) - field index 8
 	if len(parts) > 8 {
-	// Check mode (should be "N" for not valid) - field index 7
-	if len(parts) > 7 {
-		sentencePart := strings.Split(parts[7], "*")[0] // Remove checksum
+		sentencePart := strings.Split(parts[8], "*")[0] // Remove checksum
 		if sentencePart != "N" {
 			t.Errorf("generateNoFixGLL mode should be 'N', got: %s", sentencePart)
 		}
