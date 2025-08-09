@@ -36,6 +36,7 @@ clean:
 	rm -f $(BINARY_NAME)
 	rm -f $(BINARY_NAME)-*.exe
 	rm -f coverage.*
+	rm -f *.gpx
 
 # Show version information that would be built
 .PHONY: version-info

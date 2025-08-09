@@ -22,6 +22,7 @@ type GPSSimulator struct {
 	lastUpdateTime time.Time
 	satellites     []Satellite
 	nmeaWriter     io.Writer
+	gpxWriter      *GPXWriter
 }
 
 type Satellite struct {
@@ -31,7 +32,7 @@ type Satellite struct {
 	SNR       int // signal-to-noise ratio
 }
 
-func NewGPSSimulator(config Config, nmeaWriter io.Writer) *GPSSimulator {
+func NewGPSSimulator(config Config, nmeaWriter io.Writer) (*GPSSimulator, error) {
 	now := time.Now()
 	sim := &GPSSimulator{
 		config:         config,
@@ -47,10 +48,19 @@ func NewGPSSimulator(config Config, nmeaWriter io.Writer) *GPSSimulator {
 		nmeaWriter:     nmeaWriter,
 	}
 
+	// Initialize GPX writer if GPX is enabled
+	if config.GPXEnabled {
+		gpxWriter, err := NewGPXWriter(config.GPXFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create GPX writer: %v", err)
+		}
+		sim.gpxWriter = gpxWriter
+	}
+
 	// Initialize satellites
 	sim.initializeSatellites()
 
-	return sim
+	return sim, nil
 }
 
 func (s *GPSSimulator) initializeSatellites() {
@@ -70,9 +80,64 @@ func (s *GPSSimulator) Run() {
 	ticker := time.NewTicker(s.config.OutputRate)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		s.update()
-		s.outputNMEA()
+	// Ensure GPX writer is closed when simulation ends
+	defer s.Close()
+
+	// Set up duration timer if specified
+	var durationTimer *time.Timer
+	var durationChan <-chan time.Time
+	if s.config.Duration > 0 {
+		durationTimer = time.NewTimer(s.config.Duration)
+		durationChan = durationTimer.C
+		defer durationTimer.Stop()
+
+		if !s.config.Quiet {
+			fmt.Fprintf(os.Stderr, "Simulation will run for %v\n", s.config.Duration)
+		}
+	}
+
+	for {
+		select {
+		case <-ticker.C:
+			s.update()
+			s.outputNMEA()
+			s.updateGPX()
+		case <-durationChan:
+			if !s.config.Quiet {
+				fmt.Fprintf(os.Stderr, "\nSimulation completed after %v\n", s.config.Duration)
+			}
+			return
+		}
+	}
+}
+
+// Close closes any open resources (like GPX writer)
+func (s *GPSSimulator) Close() {
+	if s.gpxWriter != nil {
+		if !s.config.Quiet {
+			fmt.Fprintf(os.Stderr, "Writing GPX file: %s with %d track points\n",
+				s.config.GPXFile, s.gpxWriter.GetTrackPointCount())
+		}
+		err := s.gpxWriter.Close()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error closing GPX file: %v\n", err)
+		}
+	}
+}
+
+// updateGPX adds current position to GPX track if GPX writer is enabled and GPS is locked
+func (s *GPSSimulator) updateGPX() {
+	if s.gpxWriter != nil && s.isLocked {
+		s.gpxWriter.AddTrackPoint(s.currentLat, s.currentLon, s.currentAlt, time.Now())
+
+		// Write to file periodically to avoid losing data if program is interrupted
+		// Write every 10 points to balance between performance and data safety
+		if s.gpxWriter.GetTrackPointCount()%10 == 0 {
+			err := s.gpxWriter.WriteToFile()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error writing GPX data: %v\n", err)
+			}
+		}
 	}
 }
 

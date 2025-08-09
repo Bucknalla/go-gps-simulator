@@ -230,7 +230,10 @@ func TestMainWorkflow(t *testing.T) {
 
 	// Test that we can create a simulator (what main does)
 	nmeaWriter := os.Stdout // This is what main uses when no serial port is specified
-	simulator := NewGPSSimulator(config, nmeaWriter)
+	simulator, err := NewGPSSimulator(config, nmeaWriter)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 
 	if simulator == nil {
 		t.Error("Should be able to create GPS simulator like main() does")
@@ -280,7 +283,10 @@ func TestQuietFlag(t *testing.T) {
 			}
 
 			// Test that we can create a simulator with quiet mode
-			simulator := NewGPSSimulator(config, os.Stdout)
+			simulator, err := NewGPSSimulator(config, os.Stdout)
+			if err != nil {
+				t.Fatalf("Failed to create GPS simulator: %v", err)
+			}
 			if simulator == nil {
 				t.Error("Should be able to create GPS simulator with quiet mode")
 			}
@@ -314,6 +320,122 @@ func TestQuietFlagBehavior(t *testing.T) {
 	}
 }
 
+// Test main function components indirectly
+func TestMainFunctionComponents(t *testing.T) {
+	// Test that we can simulate the main function workflow
+	// We can't test main() directly, but we can test its components
+
+	// Test version variables are accessible (simulates version flag)
+	if Version == "" {
+		t.Error("Version should be accessible")
+	}
+	if Commit == "" {
+		t.Error("Commit should be accessible")
+	}
+	if BuildDate == "" {
+		t.Error("BuildDate should be accessible")
+	}
+
+	// Test config creation and validation (simulates flag parsing)
+	config := Config{
+		Latitude:       37.7749,
+		Longitude:      -122.4194,
+		Radius:         100.0,
+		Altitude:       45.0,
+		Jitter:         0.5,
+		AltitudeJitter: 0.1,
+		Speed:          5.0,
+		Course:         90.0,
+		Satellites:     8,
+		TimeToLock:     30 * time.Second,
+		OutputRate:     1 * time.Second,
+		SerialPort:     "/dev/ttyUSB0",
+		BaudRate:       9600,
+		Quiet:          false,
+		GPXEnabled:     true,
+		GPXFile:        "test_main.gpx",
+	}
+
+	// Test validation logic (simulates main's validation)
+	if config.Satellites < 4 || config.Satellites > 12 {
+		t.Error("Satellite validation should pass")
+	}
+	if config.Radius < 0 {
+		t.Error("Radius validation should pass")
+	}
+	if config.Jitter < 0.0 || config.Jitter > 1.0 {
+		t.Error("Jitter validation should pass")
+	}
+
+	// Test simulator creation (simulates main's simulator creation)
+	nmeaWriter := os.Stdout
+	simulator, err := NewGPSSimulator(config, nmeaWriter)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
+
+	if simulator == nil {
+		t.Error("Simulator should be created successfully")
+	}
+
+	// Test that simulator has correct config
+	if simulator.config.Latitude != config.Latitude {
+		t.Error("Simulator should have correct latitude")
+	}
+	if simulator.config.GPXEnabled != config.GPXEnabled {
+		t.Error("Simulator should have correct GPX settings")
+	}
+
+	// Clean up
+	simulator.Close()
+	os.Remove("test_main.gpx")
+}
+
+func TestConfigFieldAccess(t *testing.T) {
+	// Test that all Config fields are properly accessible and assignable
+	// This indirectly tests the struct definition used by main()
+	config := Config{}
+
+	// Test all numeric fields
+	config.Latitude = 1.0
+	config.Longitude = 2.0
+	config.Radius = 3.0
+	config.Altitude = 4.0
+	config.Jitter = 0.5
+	config.AltitudeJitter = 0.6
+	config.Speed = 7.0
+	config.Course = 8.0
+	config.Satellites = 9
+	config.BaudRate = 9600
+
+	// Test time fields
+	config.TimeToLock = 30 * time.Second
+	config.OutputRate = 1 * time.Second
+	config.Duration = 60 * time.Second
+
+	// Test string fields
+	config.SerialPort = "/dev/ttyUSB0"
+	config.GPXFile = "test.gpx"
+
+	// Test boolean fields
+	config.Quiet = true
+	config.GPXEnabled = true
+
+	// Verify all assignments worked
+	if config.Latitude != 1.0 {
+		t.Error("Latitude field should be assignable")
+	}
+	if config.Longitude != 2.0 {
+		t.Error("Longitude field should be assignable")
+	}
+	if config.GPXEnabled != true {
+		t.Error("GPXEnabled field should be assignable")
+	}
+	if config.Quiet != true {
+		t.Error("Quiet field should be assignable")
+	}
+}
+
 // Test that quiet mode affects the correct behavior in simulator
 func TestQuietModeIntegration(t *testing.T) {
 	// Test with quiet mode enabled
@@ -329,7 +451,10 @@ func TestQuietModeIntegration(t *testing.T) {
 		Quiet:      true,
 	}
 
-	quietSim := NewGPSSimulator(quietConfig, os.Stdout)
+	quietSim, err := NewGPSSimulator(quietConfig, os.Stdout)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 	if !quietSim.config.Quiet {
 		t.Error("Simulator should preserve quiet mode setting")
 	}
@@ -347,7 +472,10 @@ func TestQuietModeIntegration(t *testing.T) {
 		Quiet:      false,
 	}
 
-	verboseSim := NewGPSSimulator(verboseConfig, os.Stdout)
+	verboseSim, err := NewGPSSimulator(verboseConfig, os.Stdout)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 	if verboseSim.config.Quiet {
 		t.Error("Simulator should preserve non-quiet mode setting")
 	}

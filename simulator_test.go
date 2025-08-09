@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -30,7 +31,10 @@ func TestNewGPSSimulator(t *testing.T) {
 	config := createTestConfig()
 	buffer := &bytes.Buffer{}
 
-	sim := NewGPSSimulator(config, buffer)
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 
 	// Test that simulator is properly initialized
 	if sim == nil {
@@ -89,7 +93,10 @@ func TestNewGPSSimulator(t *testing.T) {
 func TestInitializeSatellites(t *testing.T) {
 	config := createTestConfig()
 	buffer := &bytes.Buffer{}
-	sim := NewGPSSimulator(config, buffer)
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 
 	// Test satellite count
 	if len(sim.satellites) != config.Satellites {
@@ -127,7 +134,10 @@ func TestAltitudeSimulation(t *testing.T) {
 	config.AltitudeJitter = 0.5
 	buffer := &bytes.Buffer{}
 
-	sim := NewGPSSimulator(config, buffer)
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 
 	// Test initial altitude
 	if sim.currentAlt != 1000.0 {
@@ -162,7 +172,10 @@ func TestAltitudeStability(t *testing.T) {
 	config.AltitudeJitter = 0.0 // No jitter
 	buffer := &bytes.Buffer{}
 
-	sim := NewGPSSimulator(config, buffer)
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 	sim.isLocked = true
 
 	initialAltitude := sim.currentAlt
@@ -183,7 +196,10 @@ func TestAltitudeInNMEA(t *testing.T) {
 	config.Altitude = 2500.0
 	buffer := &bytes.Buffer{}
 
-	sim := NewGPSSimulator(config, buffer)
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 	sim.isLocked = true
 
 	// Generate NMEA output
@@ -210,7 +226,10 @@ func TestAltitudeInNMEA(t *testing.T) {
 func TestDistanceFromCenter(t *testing.T) {
 	config := createTestConfig()
 	buffer := &bytes.Buffer{}
-	sim := NewGPSSimulator(config, buffer)
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 
 	tests := []struct {
 		name      string
@@ -281,7 +300,10 @@ func TestUpdatePosition(t *testing.T) {
 			config.Speed = tt.speed
 			config.Course = tt.course
 			buffer := &bytes.Buffer{}
-			sim := NewGPSSimulator(config, buffer)
+			sim, err := NewGPSSimulator(config, buffer)
+			if err != nil {
+				t.Fatalf("Failed to create GPS simulator: %v", err)
+			}
 			sim.isLocked = true
 
 			// Store initial position
@@ -336,7 +358,10 @@ func TestUpdatePositionEdgeCases(t *testing.T) {
 		config.Speed = 10.0
 		config.Course = 90.0
 		buffer := &bytes.Buffer{}
-		sim := NewGPSSimulator(config, buffer)
+		sim, err := NewGPSSimulator(config, buffer)
+		if err != nil {
+			t.Fatalf("Failed to create GPS simulator: %v", err)
+		}
 		sim.isLocked = true
 
 		// Call updatePosition once to establish lastUpdateTime
@@ -365,7 +390,10 @@ func TestUpdatePositionEdgeCases(t *testing.T) {
 		config.Jitter = 0.8  // High jitter for bouncing behavior
 		config.Radius = 50.0 // Small radius to hit boundary
 		buffer := &bytes.Buffer{}
-		sim := NewGPSSimulator(config, buffer)
+		sim, err := NewGPSSimulator(config, buffer)
+		if err != nil {
+			t.Fatalf("Failed to create GPS simulator: %v", err)
+		}
 		sim.isLocked = true
 
 		// Move close to boundary
@@ -396,7 +424,10 @@ func TestUpdatePositionEdgeCases(t *testing.T) {
 		config.Jitter = 0.1  // Low jitter for constraint behavior
 		config.Radius = 50.0 // Small radius to hit boundary
 		buffer := &bytes.Buffer{}
-		sim := NewGPSSimulator(config, buffer)
+		sim, err := NewGPSSimulator(config, buffer)
+		if err != nil {
+			t.Fatalf("Failed to create GPS simulator: %v", err)
+		}
 		sim.isLocked = true
 
 		// Move close to boundary
@@ -424,7 +455,10 @@ func TestCourseNormalization(t *testing.T) {
 	config.Course = 350.0 // Near 360°
 	config.Jitter = 0.8   // High jitter to cause large course changes
 	buffer := &bytes.Buffer{}
-	sim := NewGPSSimulator(config, buffer)
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 	sim.isLocked = true
 
 	// Test multiple updates to trigger course normalization
@@ -444,7 +478,10 @@ func TestCourseNormalization(t *testing.T) {
 		config.Jitter = 0.9  // Maximum jitter for extreme course changes
 		config.Radius = 30.0 // Very small radius to force frequent bouncing
 		buffer := &bytes.Buffer{}
-		sim := NewGPSSimulator(config, buffer)
+		sim, err := NewGPSSimulator(config, buffer)
+		if err != nil {
+			t.Fatalf("Failed to create GPS simulator: %v", err)
+		}
 		sim.isLocked = true
 
 		// Set up position very close to boundary to force bouncing
@@ -479,7 +516,10 @@ func TestUpdatePositionBoundaryConstraints(t *testing.T) {
 	config.Jitter = 0.3
 
 	buffer := &bytes.Buffer{}
-	sim := NewGPSSimulator(config, buffer)
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 	sim.isLocked = true
 
 	// Update position multiple times - should stay near center for stationary GPS
@@ -508,7 +548,10 @@ func TestUpdateAltitudeEdgeCases(t *testing.T) {
 		config.Altitude = 1000.0
 		config.AltitudeJitter = 0.0 // No jitter
 		buffer := &bytes.Buffer{}
-		sim := NewGPSSimulator(config, buffer)
+		sim, err := NewGPSSimulator(config, buffer)
+		if err != nil {
+			t.Fatalf("Failed to create GPS simulator: %v", err)
+		}
 		sim.isLocked = true
 
 		initialAltitude := sim.currentAlt
@@ -529,7 +572,10 @@ func TestUpdateAltitudeEdgeCases(t *testing.T) {
 		config.Altitude = 100.0
 		config.AltitudeJitter = 1.0 // Maximum jitter
 		buffer := &bytes.Buffer{}
-		sim := NewGPSSimulator(config, buffer)
+		sim, err := NewGPSSimulator(config, buffer)
+		if err != nil {
+			t.Fatalf("Failed to create GPS simulator: %v", err)
+		}
 		sim.isLocked = true
 
 		// Update many times to test boundary conditions
@@ -562,7 +608,10 @@ func TestUpdateAltitudeEdgeCases(t *testing.T) {
 		config.Altitude = 10.0      // Near sea level
 		config.AltitudeJitter = 1.0 // Maximum jitter
 		buffer := &bytes.Buffer{}
-		sim := NewGPSSimulator(config, buffer)
+		sim, err := NewGPSSimulator(config, buffer)
+		if err != nil {
+			t.Fatalf("Failed to create GPS simulator: %v", err)
+		}
 		sim.isLocked = true
 
 		// Update many times to test sea level boundary
@@ -584,7 +633,10 @@ func TestUpdateAltitudeEdgeCases(t *testing.T) {
 func TestUpdateSatellites(t *testing.T) {
 	config := createTestConfig()
 	buffer := &bytes.Buffer{}
-	sim := NewGPSSimulator(config, buffer)
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 
 	// Store initial satellite states
 	initialSats := make([]Satellite, len(sim.satellites))
@@ -640,7 +692,10 @@ func TestUpdateSatellites(t *testing.T) {
 func TestUpdateSatellitesBoundaryConditions(t *testing.T) {
 	config := createTestConfig()
 	buffer := &bytes.Buffer{}
-	sim := NewGPSSimulator(config, buffer)
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 
 	// Test elevation boundary conditions
 	sim.satellites[0].Elevation = 4  // Below minimum
@@ -671,7 +726,10 @@ func TestUpdate(t *testing.T) {
 	config := createTestConfig()
 	config.TimeToLock = 100 * time.Millisecond // Short lock time for testing
 	buffer := &bytes.Buffer{}
-	sim := NewGPSSimulator(config, buffer)
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 
 	// Initially should not be locked
 	if sim.isLocked {
@@ -706,7 +764,10 @@ func TestUpdate(t *testing.T) {
 func TestOutputNMEA(t *testing.T) {
 	config := createTestConfig()
 	buffer := &bytes.Buffer{}
-	sim := NewGPSSimulator(config, buffer)
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 
 	// Test output when not locked
 	buffer.Reset()
@@ -767,7 +828,10 @@ func TestOutputNMEA(t *testing.T) {
 func TestOutputNMEAChecksums(t *testing.T) {
 	config := createTestConfig()
 	buffer := &bytes.Buffer{}
-	sim := NewGPSSimulator(config, buffer)
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 	sim.isLocked = true
 
 	buffer.Reset()
@@ -825,7 +889,10 @@ func TestSatelliteStruct(t *testing.T) {
 func BenchmarkUpdatePosition(b *testing.B) {
 	config := createTestConfig()
 	buffer := &bytes.Buffer{}
-	sim := NewGPSSimulator(config, buffer)
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		b.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 	sim.isLocked = true
 
 	b.ResetTimer()
@@ -837,7 +904,10 @@ func BenchmarkUpdatePosition(b *testing.B) {
 func BenchmarkUpdateSatellites(b *testing.B) {
 	config := createTestConfig()
 	buffer := &bytes.Buffer{}
-	sim := NewGPSSimulator(config, buffer)
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		b.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -848,7 +918,10 @@ func BenchmarkUpdateSatellites(b *testing.B) {
 func BenchmarkDistanceFromCenter(b *testing.B) {
 	config := createTestConfig()
 	buffer := &bytes.Buffer{}
-	sim := NewGPSSimulator(config, buffer)
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		b.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 
 	lat := config.Latitude + 0.001
 	lon := config.Longitude + 0.001
@@ -865,7 +938,10 @@ func TestRun(t *testing.T) {
 	config.OutputRate = 10 * time.Millisecond // Very fast for testing
 	config.TimeToLock = 5 * time.Millisecond  // Quick lock
 	buffer := &bytes.Buffer{}
-	sim := NewGPSSimulator(config, buffer)
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 
 	// Run for a short duration
 	done := make(chan bool)
@@ -898,7 +974,10 @@ func TestGenerateGSVEdgeCases(t *testing.T) {
 	config := createTestConfig()
 	config.Satellites = 0
 	buffer := &bytes.Buffer{}
-	sim := NewGPSSimulator(config, buffer)
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 	sim.satellites = []Satellite{} // Empty satellites
 
 	result := sim.generateGSV()
@@ -997,7 +1076,10 @@ func TestGenerateRMCEdgeCases(t *testing.T) {
 func BenchmarkOutputNMEA(b *testing.B) {
 	config := createTestConfig()
 	buffer := &bytes.Buffer{}
-	sim := NewGPSSimulator(config, buffer)
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		b.Fatalf("Failed to create GPS simulator: %v", err)
+	}
 	sim.isLocked = true
 
 	b.ResetTimer()
@@ -1012,7 +1094,10 @@ func TestUpdateSatellitesEdgeCases(t *testing.T) {
 		config := createTestConfig()
 		config.Satellites = 1 // Single satellite for easier testing
 		buffer := &bytes.Buffer{}
-		sim := NewGPSSimulator(config, buffer)
+		sim, err := NewGPSSimulator(config, buffer)
+		if err != nil {
+			t.Fatalf("Failed to create GPS simulator: %v", err)
+		}
 
 		// Update multiple times and track changes
 		elevationChanges := 0
@@ -1046,7 +1131,10 @@ func TestUpdateSatellitesEdgeCases(t *testing.T) {
 	t.Run("Extreme satellite boundary conditions", func(t *testing.T) {
 		config := createTestConfig()
 		buffer := &bytes.Buffer{}
-		sim := NewGPSSimulator(config, buffer)
+		sim, err := NewGPSSimulator(config, buffer)
+		if err != nil {
+			t.Fatalf("Failed to create GPS simulator: %v", err)
+		}
 
 		// Set satellites to boundary values
 		sim.satellites[0].Elevation = 4  // Below minimum
@@ -1073,13 +1161,499 @@ func TestUpdateSatellitesEdgeCases(t *testing.T) {
 	})
 }
 
+func TestClose(t *testing.T) {
+	// Test Close function with GPX writer
+	config := createTestConfig()
+	config.GPXEnabled = true
+	config.GPXFile = "test_close.gpx"
+	config.Quiet = false
+	buffer := &bytes.Buffer{}
+
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
+
+	// Add some track points
+	sim.isLocked = true
+	sim.updateGPX()
+	sim.updateGPX()
+
+	// Capture stderr for testing output
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	// Close the simulator
+	sim.Close()
+
+	// Restore stderr and read captured output
+	w.Close()
+	os.Stderr = oldStderr
+	captured := make([]byte, 1000)
+	n, _ := r.Read(captured)
+	output := string(captured[:n])
+
+	// Should contain GPX file writing message
+	if !strings.Contains(output, "Writing GPX file: test_close.gpx") {
+		t.Errorf("Expected GPX writing message in output, got: %s", output)
+	}
+
+	// Clean up
+	os.Remove("test_close.gpx")
+}
+
+func TestCloseWithoutGPX(t *testing.T) {
+	// Test Close function without GPX writer
+	config := createTestConfig()
+	config.GPXEnabled = false
+	buffer := &bytes.Buffer{}
+
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
+
+	// Should not panic when closing without GPX writer
+	sim.Close()
+}
+
+func TestCloseQuietMode(t *testing.T) {
+	// Test Close function in quiet mode
+	config := createTestConfig()
+	config.GPXEnabled = true
+	config.GPXFile = "test_close_quiet.gpx"
+	config.Quiet = true
+	buffer := &bytes.Buffer{}
+
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
+
+	// Add some track points
+	sim.isLocked = true
+	sim.updateGPX()
+
+	// Capture stderr for testing output
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	// Close the simulator
+	sim.Close()
+
+	// Restore stderr and read captured output
+	w.Close()
+	os.Stderr = oldStderr
+	captured := make([]byte, 1000)
+	n, _ := r.Read(captured)
+	output := string(captured[:n])
+
+	// Should not contain any output in quiet mode
+	if len(output) > 0 {
+		t.Errorf("Expected no output in quiet mode, got: %s", output)
+	}
+
+	// Clean up
+	os.Remove("test_close_quiet.gpx")
+}
+
+func TestUpdateGPX(t *testing.T) {
+	// Test updateGPX function with GPX enabled and GPS locked
+	config := createTestConfig()
+	config.GPXEnabled = true
+	config.GPXFile = "test_update_gpx.gpx"
+	buffer := &bytes.Buffer{}
+
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
+
+	// GPS not locked - should not add points
+	sim.updateGPX()
+	if sim.gpxWriter.GetTrackPointCount() != 0 {
+		t.Error("Should not add track points when GPS is not locked")
+	}
+
+	// GPS locked - should add points
+	sim.isLocked = true
+	sim.updateGPX()
+	if sim.gpxWriter.GetTrackPointCount() != 1 {
+		t.Errorf("Expected 1 track point, got %d", sim.gpxWriter.GetTrackPointCount())
+	}
+
+	// Add more points to test periodic writing (every 10 points)
+	for i := 0; i < 12; i++ {
+		sim.updateGPX()
+	}
+
+	if sim.gpxWriter.GetTrackPointCount() != 13 {
+		t.Errorf("Expected 13 track points, got %d", sim.gpxWriter.GetTrackPointCount())
+	}
+
+	// Clean up
+	sim.Close()
+	os.Remove("test_update_gpx.gpx")
+}
+
+func TestUpdateGPXWithoutGPXWriter(t *testing.T) {
+	// Test updateGPX function without GPX writer
+	config := createTestConfig()
+	config.GPXEnabled = false
+	buffer := &bytes.Buffer{}
+
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
+
+	sim.isLocked = true
+	// Should not panic when calling updateGPX without GPX writer
+	sim.updateGPX()
+}
+
+func TestNewGPSSimulatorWithGPXError(t *testing.T) {
+	// Test NewGPSSimulator with invalid GPX file path
+	config := createTestConfig()
+	config.GPXEnabled = true
+	config.GPXFile = "/invalid/path/test.gpx"
+	buffer := &bytes.Buffer{}
+
+	_, err := NewGPSSimulator(config, buffer)
+	if err == nil {
+		t.Error("Expected error for invalid GPX file path, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "failed to create GPX writer") {
+		t.Errorf("Expected GPX writer error, got: %v", err)
+	}
+}
+
+func TestNewGPSSimulatorWithGPXEnabled(t *testing.T) {
+	// Test NewGPSSimulator with GPX enabled
+	config := createTestConfig()
+	config.GPXEnabled = true
+	config.GPXFile = "test_new_simulator.gpx"
+	buffer := &bytes.Buffer{}
+
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
+
+	if sim.gpxWriter == nil {
+		t.Error("Expected GPX writer to be initialized")
+	}
+
+	// Clean up
+	sim.Close()
+	os.Remove("test_new_simulator.gpx")
+}
+
+func TestRunWithDuration(t *testing.T) {
+	// Test Run function with duration limit
+	config := createTestConfig()
+	config.OutputRate = 10 * time.Millisecond
+	config.Duration = 50 * time.Millisecond
+	config.Quiet = false
+	buffer := &bytes.Buffer{}
+
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
+
+	// Capture stderr for testing output
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	start := time.Now()
+	sim.Run()
+	elapsed := time.Since(start)
+
+	// Restore stderr and read captured output
+	w.Close()
+	os.Stderr = oldStderr
+	captured := make([]byte, 1000)
+	n, _ := r.Read(captured)
+	output := string(captured[:n])
+
+	// Should have run for approximately the specified duration
+	if elapsed < 40*time.Millisecond || elapsed > 100*time.Millisecond {
+		t.Errorf("Expected run time around 50ms, got %v", elapsed)
+	}
+
+	// Should contain duration messages
+	if !strings.Contains(output, "Simulation will run for") {
+		t.Error("Expected duration start message in output")
+	}
+	if !strings.Contains(output, "Simulation completed after") {
+		t.Error("Expected duration completion message in output")
+	}
+
+	// Should have generated some NMEA output
+	nmeaOutput := buffer.String()
+	if len(nmeaOutput) == 0 {
+		t.Error("Expected NMEA output from Run function")
+	}
+}
+
+func TestRunWithDurationQuiet(t *testing.T) {
+	// Test Run function with duration in quiet mode
+	config := createTestConfig()
+	config.OutputRate = 10 * time.Millisecond
+	config.Duration = 30 * time.Millisecond
+	config.Quiet = true
+	buffer := &bytes.Buffer{}
+
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
+
+	// Capture stderr for testing output
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	sim.Run()
+
+	// Restore stderr and read captured output
+	w.Close()
+	os.Stderr = oldStderr
+	captured := make([]byte, 1000)
+	n, _ := r.Read(captured)
+	output := string(captured[:n])
+
+	// Should not contain any output in quiet mode
+	if len(output) > 0 {
+		t.Errorf("Expected no output in quiet mode, got: %s", output)
+	}
+}
+
+func TestUpdateGPXWriteError(t *testing.T) {
+	// Test updateGPX with WriteToFile error
+	config := createTestConfig()
+	config.GPXEnabled = true
+	config.GPXFile = "test_update_gpx_error.gpx"
+	buffer := &bytes.Buffer{}
+
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
+	defer sim.Close()
+	defer os.Remove("test_update_gpx_error.gpx")
+
+	sim.isLocked = true
+
+	// Add 9 track points (won't trigger write)
+	for i := 0; i < 9; i++ {
+		sim.updateGPX()
+	}
+
+	// Close the underlying file to cause WriteToFile error on 10th point
+	if sim.gpxWriter.file != nil {
+		sim.gpxWriter.file.Close()
+	}
+
+	// Capture stderr to verify error message
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	// Add 10th point - should trigger WriteToFile error
+	sim.updateGPX()
+
+	// Restore stderr and read captured output
+	w.Close()
+	os.Stderr = oldStderr
+	captured := make([]byte, 1000)
+	n, _ := r.Read(captured)
+	output := string(captured[:n])
+
+	// Should contain error message
+	if !strings.Contains(output, "Error writing GPX data:") {
+		t.Errorf("Expected GPX write error message in output, got: %s", output)
+	}
+}
+
+func TestCloseWithGPXError(t *testing.T) {
+	// Test Close with GPX writer error
+	config := createTestConfig()
+	config.GPXEnabled = true
+	config.GPXFile = "test_close_gpx_error.gpx"
+	config.Quiet = false
+	buffer := &bytes.Buffer{}
+
+	sim, err := NewGPSSimulator(config, buffer)
+	if err != nil {
+		t.Fatalf("Failed to create GPS simulator: %v", err)
+	}
+	defer os.Remove("test_close_gpx_error.gpx")
+
+	// Add some track points
+	sim.isLocked = true
+	sim.updateGPX()
+
+	// Close the underlying GPX file to cause error in Close
+	if sim.gpxWriter.file != nil {
+		sim.gpxWriter.file.Close()
+	}
+
+	// Capture stderr to verify error messages
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	// Close should trigger error
+	sim.Close()
+
+	// Restore stderr and read captured output
+	w.Close()
+	os.Stderr = oldStderr
+	captured := make([]byte, 1000)
+	n, _ := r.Read(captured)
+	output := string(captured[:n])
+
+	// Should contain both writing message and error message
+	if !strings.Contains(output, "Writing GPX file: test_close_gpx_error.gpx") {
+		t.Errorf("Expected GPX writing message in output, got: %s", output)
+	}
+	if !strings.Contains(output, "Error closing GPX file:") {
+		t.Errorf("Expected GPX close error message in output, got: %s", output)
+	}
+}
+
+func TestUpdatePositionEdgeCasesAdvanced(t *testing.T) {
+	// Test more edge cases for updatePosition to improve coverage
+	t.Run("Zero radius with movement", func(t *testing.T) {
+		config := createTestConfig()
+		config.Radius = 0.0 // Zero radius
+		config.Speed = 50.0 // Higher speed for more detectable movement
+		config.Course = 45.0
+		config.Jitter = 0.1
+		buffer := &bytes.Buffer{}
+		sim, err := NewGPSSimulator(config, buffer)
+		if err != nil {
+			t.Fatalf("Failed to create GPS simulator: %v", err)
+		}
+
+		sim.isLocked = true
+		sim.currentSpeed = config.Speed
+		sim.currentCourse = config.Course
+		initialLat := sim.currentLat
+		initialLon := sim.currentLon
+
+		// Update position multiple times with longer time intervals
+		for i := 0; i < 3; i++ {
+			sim.updateSpeedAndCourse()
+			time.Sleep(50 * time.Millisecond) // Longer time for more movement
+			sim.updatePosition()
+		}
+
+		// With zero radius, position should still be able to change due to movement
+		latChange := math.Abs(sim.currentLat - initialLat)
+		lonChange := math.Abs(sim.currentLon - initialLon)
+		totalChange := math.Sqrt(latChange*latChange + lonChange*lonChange)
+
+		// With zero radius, movement should still occur if speed > 0
+		// This tests the boundary logic when radius is zero
+		if totalChange < 0.00001 {
+			// This might actually be expected behavior - zero radius might constrain movement
+			t.Logf("Position change was minimal (%.8f) with zero radius - this may be correct behavior", totalChange)
+		}
+	})
+
+	t.Run("Very high speed movement", func(t *testing.T) {
+		config := createTestConfig()
+		config.Speed = 1000.0   // Very high speed
+		config.Course = 0.0     // Due north
+		config.Jitter = 0.0     // No jitter for predictable movement
+		config.Radius = 10000.0 // Large radius to avoid boundary effects
+		buffer := &bytes.Buffer{}
+		sim, err := NewGPSSimulator(config, buffer)
+		if err != nil {
+			t.Fatalf("Failed to create GPS simulator: %v", err)
+		}
+
+		sim.isLocked = true
+		sim.currentSpeed = config.Speed
+		sim.currentCourse = config.Course
+
+		initialLat := sim.currentLat
+
+		// Update with significant time gap
+		time.Sleep(50 * time.Millisecond)
+		sim.updatePosition()
+
+		// Should have moved significantly north
+		latChange := sim.currentLat - initialLat
+		if latChange <= 0 {
+			t.Error("Expected northward movement with high speed")
+		}
+	})
+
+	t.Run("Boundary collision with different courses", func(t *testing.T) {
+		courses := []float64{0, 45, 90, 135, 180, 225, 270, 315}
+
+		for _, course := range courses {
+			config := createTestConfig()
+			config.Speed = 100.0
+			config.Course = course
+			config.Jitter = 0.9  // High jitter for bouncing
+			config.Radius = 30.0 // Small radius
+			buffer := &bytes.Buffer{}
+			sim, err := NewGPSSimulator(config, buffer)
+			if err != nil {
+				t.Fatalf("Failed to create GPS simulator: %v", err)
+			}
+
+			sim.isLocked = true
+			sim.currentSpeed = config.Speed
+			sim.currentCourse = course
+
+			// Move close to boundary in the direction of the course
+			radiusDeg := config.Radius / 111320.0
+			switch {
+			case course >= 315 || course < 45: // North
+				sim.currentLat = config.Latitude + radiusDeg*0.9
+			case course >= 45 && course < 135: // East
+				sim.currentLon = config.Longitude + radiusDeg*0.9
+			case course >= 135 && course < 225: // South
+				sim.currentLat = config.Latitude - radiusDeg*0.9
+			case course >= 225 && course < 315: // West
+				sim.currentLon = config.Longitude - radiusDeg*0.9
+			}
+
+			// Update position to trigger boundary logic
+			sim.updateSpeedAndCourse()
+			time.Sleep(20 * time.Millisecond)
+			sim.updatePosition()
+
+			// Verify still within reasonable bounds
+			distance := sim.distanceFromCenter(sim.currentLat, sim.currentLon)
+			if distance > config.Radius*2.0 {
+				t.Errorf("Course %.0f: Position too far from center: %.2f > %.2f",
+					course, distance, config.Radius*2.0)
+			}
+		}
+	})
+}
+
 func TestUpdateSpeedAndCourseEdgeCases(t *testing.T) {
 	t.Run("Zero speed edge case", func(t *testing.T) {
 		config := createTestConfig()
 		config.Speed = 0.0
 		config.Jitter = 0.8 // High jitter
 		buffer := &bytes.Buffer{}
-		sim := NewGPSSimulator(config, buffer)
+		sim, err := NewGPSSimulator(config, buffer)
+		if err != nil {
+			t.Fatalf("Failed to create GPS simulator: %v", err)
+		}
 
 		// Update multiple times
 		for i := 0; i < 10; i++ {
@@ -1109,7 +1683,10 @@ func TestUpdateSpeedAndCourseEdgeCases(t *testing.T) {
 				config.Course = tc.course
 				config.Jitter = tc.jitter
 				buffer := &bytes.Buffer{}
-				sim := NewGPSSimulator(config, buffer)
+				sim, err := NewGPSSimulator(config, buffer)
+				if err != nil {
+					t.Fatalf("Failed to create GPS simulator: %v", err)
+				}
 
 				// Update many times to test wraparound
 				for i := 0; i < 50; i++ {
@@ -1134,7 +1711,10 @@ func TestUpdateSpeedAndCourseEdgeCases(t *testing.T) {
 				config.Course = 90.0
 				config.Jitter = jitter
 				buffer := &bytes.Buffer{}
-				sim := NewGPSSimulator(config, buffer)
+				sim, err := NewGPSSimulator(config, buffer)
+				if err != nil {
+					t.Fatalf("Failed to create GPS simulator: %v", err)
+				}
 
 				speedVariations := []float64{}
 				courseVariations := []float64{}

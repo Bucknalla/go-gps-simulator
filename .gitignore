@@ -3,3 +3,4 @@ gps-simulator
 *.out
 *.html
 dist/
+*.gpx
