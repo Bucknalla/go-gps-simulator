@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"go.bug.st/serial"
+	"github.com/Bucknalla/go-gps-simulator/gps"
 )
 
 // Version information - populated at build time via ldflags
@@ -18,31 +19,8 @@ var (
 	BuildDate = "unknown" // Will be set to build timestamp
 )
 
-type Config struct {
-	Latitude       float64
-	Longitude      float64
-	Radius         float64 // in meters
-	Altitude       float64 // starting altitude in meters
-	Jitter         float64 // GPS jitter factor (0.0-1.0)
-	AltitudeJitter float64 // altitude jitter factor (0.0-1.0)
-	Speed          float64 // static speed in knots
-	Course         float64 // static course in degrees (0-359)
-	Satellites     int
-	TimeToLock     time.Duration
-	OutputRate     time.Duration
-	SerialPort     string        // Serial port device (e.g., /dev/ttyUSB0, COM1)
-	BaudRate       int           // Serial baud rate
-	Quiet          bool          // Suppress informational messages
-	GPXEnabled     bool          // Enable GPX file generation with timestamp filename
-	GPXFile        string        // Generated GPX filename (internal use)
-	Duration       time.Duration // How long to run the simulation (0 = run indefinitely)
-	ReplayFile     string        // GPX file to replay (empty = normal simulation mode)
-	ReplaySpeed    float64       // Replay speed multiplier (1.0 = real-time, 2.0 = 2x speed, etc.)
-	ReplayLoop     bool          // Whether to loop the replay (false = stop after one pass, true = loop continuously)
-}
-
 func main() {
-	var config Config
+	var config gps.Config
 	var showVersion bool
 
 	// Define command line flags
@@ -181,7 +159,7 @@ func main() {
 	}
 
 	// Start GPS simulation
-	simulator, err := NewGPSSimulator(config, nmeaWriter)
+	simulator, err := gps.NewGPSSimulator(config, nmeaWriter)
 	if err != nil {
 		log.Fatalf("Failed to create GPS simulator: %v", err)
 	}

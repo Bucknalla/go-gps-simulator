@@ -1,4 +1,4 @@
-package main
+package gps
 
 import (
 	"bytes"
@@ -88,11 +88,11 @@ func createTestSimulator() *GPSSimulator {
 	}
 
 	sim := &GPSSimulator{
-		config:     config,
+		Config:     config,
 		currentLat: config.Latitude,
 		currentLon: config.Longitude,
 		isLocked:   true,
-		satellites: []Satellite{
+		Satellites: []Satellite{
 			{ID: 1, Elevation: 45, Azimuth: 90, SNR: 35},
 			{ID: 2, Elevation: 60, Azimuth: 180, SNR: 40},
 			{ID: 3, Elevation: 30, Azimuth: 270, SNR: 25},
@@ -250,7 +250,7 @@ func TestGenerateRMCWithSpeedAndCourse(t *testing.T) {
 
 	now := time.Now()
 	sim := &GPSSimulator{
-		config:         config,
+		Config:         config,
 		currentLat:     config.Latitude,
 		currentLon:     config.Longitude,
 		currentSpeed:   config.Speed,
@@ -334,7 +334,7 @@ func TestUpdateSpeedAndCourse(t *testing.T) {
 
 			now := time.Now()
 			sim := &GPSSimulator{
-				config:         config,
+				Config:         config,
 				currentSpeed:   config.Speed,
 				currentCourse:  config.Course,
 				lastUpdateTime: now,
@@ -422,8 +422,8 @@ func TestGenerateGSA(t *testing.T) {
 			satCount++
 		}
 	}
-	if satCount != len(sim.satellites) {
-		t.Errorf("generateGSA should contain %d satellite IDs, got %d", len(sim.satellites), satCount)
+	if satCount != len(sim.Satellites) {
+		t.Errorf("generateGSA should contain %d satellite IDs, got %d", len(sim.Satellites), satCount)
 	}
 }
 
@@ -471,9 +471,9 @@ func TestGenerateGSV(t *testing.T) {
 func TestGenerateGSVMultipleSentences(t *testing.T) {
 	// Create simulator with many satellites to test multiple GSV sentences
 	sim := createTestSimulator()
-	sim.satellites = make([]Satellite, 12) // Maximum satellites
+	sim.Satellites = make([]Satellite, 12) // Maximum satellites
 	for i := 0; i < 12; i++ {
-		sim.satellites[i] = Satellite{
+		sim.Satellites[i] = Satellite{
 			ID:        i + 1,
 			Elevation: 45,
 			Azimuth:   i * 30,
@@ -672,7 +672,7 @@ func TestVTGSpeedConversion(t *testing.T) {
 
 	now := time.Now()
 	sim := &GPSSimulator{
-		config:         config,
+		Config:         config,
 		currentSpeed:   config.Speed,
 		currentCourse:  config.Course,
 		isLocked:       true,

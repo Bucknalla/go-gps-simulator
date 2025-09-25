@@ -1,4 +1,4 @@
-package main
+package gps
 
 import (
 	"bytes"
@@ -43,17 +43,17 @@ func TestNewGPSSimulator(t *testing.T) {
 	}
 
 	// Test config assignment
-	if sim.config.Latitude != config.Latitude {
-		t.Errorf("Expected latitude %f, got %f", config.Latitude, sim.config.Latitude)
+	if sim.Config.Latitude != config.Latitude {
+		t.Errorf("Expected latitude %f, got %f", config.Latitude, sim.Config.Latitude)
 	}
-	if sim.config.Longitude != config.Longitude {
-		t.Errorf("Expected longitude %f, got %f", config.Longitude, sim.config.Longitude)
+	if sim.Config.Longitude != config.Longitude {
+		t.Errorf("Expected longitude %f, got %f", config.Longitude, sim.Config.Longitude)
 	}
-	if sim.config.Radius != config.Radius {
-		t.Errorf("Expected radius %f, got %f", config.Radius, sim.config.Radius)
+	if sim.Config.Radius != config.Radius {
+		t.Errorf("Expected radius %f, got %f", config.Radius, sim.Config.Radius)
 	}
-	if sim.config.Satellites != config.Satellites {
-		t.Errorf("Expected satellites %d, got %d", config.Satellites, sim.config.Satellites)
+	if sim.Config.Satellites != config.Satellites {
+		t.Errorf("Expected satellites %d, got %d", config.Satellites, sim.Config.Satellites)
 	}
 
 	// Test initial position
@@ -73,8 +73,8 @@ func TestNewGPSSimulator(t *testing.T) {
 	}
 
 	// Test satellites initialization
-	if len(sim.satellites) != config.Satellites {
-		t.Errorf("Expected %d satellites, got %d", config.Satellites, len(sim.satellites))
+	if len(sim.Satellites) != config.Satellites {
+		t.Errorf("Expected %d satellites, got %d", config.Satellites, len(sim.Satellites))
 	}
 
 	// Test writer assignment
@@ -100,12 +100,12 @@ func TestInitializeSatellites(t *testing.T) {
 	}
 
 	// Test satellite count
-	if len(sim.satellites) != config.Satellites {
-		t.Errorf("Expected %d satellites, got %d", config.Satellites, len(sim.satellites))
+	if len(sim.Satellites) != config.Satellites {
+		t.Errorf("Expected %d satellites, got %d", config.Satellites, len(sim.Satellites))
 	}
 
 	// Test satellite properties
-	for i, sat := range sim.satellites {
+	for i, sat := range sim.Satellites {
 		// Test ID assignment
 		expectedID := i + 1
 		if sat.ID != expectedID {
@@ -640,15 +640,15 @@ func TestUpdateSatellites(t *testing.T) {
 	}
 
 	// Store initial satellite states
-	initialSats := make([]Satellite, len(sim.satellites))
-	copy(initialSats, sim.satellites)
+	initialSats := make([]Satellite, len(sim.Satellites))
+	copy(initialSats, sim.Satellites)
 
 	// Update satellites multiple times
 	for i := 0; i < 10; i++ {
 		sim.updateSatellites()
 
 		// Check that all satellites remain within valid bounds
-		for j, sat := range sim.satellites {
+		for j, sat := range sim.Satellites {
 			// Check elevation bounds
 			if sat.Elevation < 5 || sat.Elevation > 85 {
 				t.Errorf("Update %d: Satellite %d elevation %d out of bounds (5-85)",
@@ -677,7 +677,7 @@ func TestUpdateSatellites(t *testing.T) {
 
 	// Check that at least some satellites have changed
 	changed := false
-	for i, sat := range sim.satellites {
+	for i, sat := range sim.Satellites {
 		if sat.Elevation != initialSats[i].Elevation ||
 			sat.Azimuth != initialSats[i].Azimuth ||
 			sat.SNR != initialSats[i].SNR {
@@ -699,27 +699,27 @@ func TestUpdateSatellitesBoundaryConditions(t *testing.T) {
 	}
 
 	// Test elevation boundary conditions
-	sim.satellites[0].Elevation = 4  // Below minimum
-	sim.satellites[1].Elevation = 86 // Above maximum
+	sim.Satellites[0].Elevation = 4  // Below minimum
+	sim.Satellites[1].Elevation = 86 // Above maximum
 
 	// Test SNR boundary conditions
-	sim.satellites[2].SNR = 14 // Below minimum
-	sim.satellites[3].SNR = 56 // Above maximum
+	sim.Satellites[2].SNR = 14 // Below minimum
+	sim.Satellites[3].SNR = 56 // Above maximum
 
 	sim.updateSatellites()
 
 	// Check that boundaries are enforced
-	if sim.satellites[0].Elevation < 5 {
-		t.Errorf("Expected elevation to be at least 5, got %d", sim.satellites[0].Elevation)
+	if sim.Satellites[0].Elevation < 5 {
+		t.Errorf("Expected elevation to be at least 5, got %d", sim.Satellites[0].Elevation)
 	}
-	if sim.satellites[1].Elevation > 85 {
-		t.Errorf("Expected elevation to be at most 85, got %d", sim.satellites[1].Elevation)
+	if sim.Satellites[1].Elevation > 85 {
+		t.Errorf("Expected elevation to be at most 85, got %d", sim.Satellites[1].Elevation)
 	}
-	if sim.satellites[2].SNR < 15 {
-		t.Errorf("Expected SNR to be at least 15, got %d", sim.satellites[2].SNR)
+	if sim.Satellites[2].SNR < 15 {
+		t.Errorf("Expected SNR to be at least 15, got %d", sim.Satellites[2].SNR)
 	}
-	if sim.satellites[3].SNR > 55 {
-		t.Errorf("Expected SNR to be at most 55, got %d", sim.satellites[3].SNR)
+	if sim.Satellites[3].SNR > 55 {
+		t.Errorf("Expected SNR to be at most 55, got %d", sim.Satellites[3].SNR)
 	}
 }
 
@@ -815,7 +815,7 @@ func TestOutputNMEA(t *testing.T) {
 
 	// Count GSV sentences (should be based on number of satellites)
 	gsvCount := strings.Count(output, "$GPGSV,")
-	expectedGSVCount := (len(sim.satellites) + 3) / 4 // Round up to nearest 4
+	expectedGSVCount := (len(sim.Satellites) + 3) / 4 // Round up to nearest 4
 	if gsvCount != expectedGSVCount {
 		t.Errorf("Expected %d GSV sentences, got %d", expectedGSVCount, gsvCount)
 	}
@@ -988,7 +988,7 @@ func TestGenerateGSVEdgeCases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create GPS simulator: %v", err)
 	}
-	sim.satellites = []Satellite{} // Empty satellites
+	sim.Satellites = []Satellite{} // Empty satellites
 
 	result := sim.generateGSV()
 	if len(result) != 0 {
@@ -996,7 +996,7 @@ func TestGenerateGSVEdgeCases(t *testing.T) {
 	}
 
 	// Test with 1 satellite (to test padding logic)
-	sim.satellites = []Satellite{
+	sim.Satellites = []Satellite{
 		{ID: 1, Elevation: 45, Azimuth: 90, SNR: 35},
 	}
 
@@ -1012,7 +1012,7 @@ func TestGenerateGSVEdgeCases(t *testing.T) {
 	}
 
 	// Test with 3 satellites (to test partial padding)
-	sim.satellites = []Satellite{
+	sim.Satellites = []Satellite{
 		{ID: 1, Elevation: 45, Azimuth: 90, SNR: 35},
 		{ID: 2, Elevation: 60, Azimuth: 180, SNR: 40},
 		{ID: 3, Elevation: 30, Azimuth: 270, SNR: 25},
@@ -1030,7 +1030,7 @@ func TestGenerateGSVEdgeCases(t *testing.T) {
 	}
 
 	// Test with exactly 4 satellites (no padding needed)
-	sim.satellites = []Satellite{
+	sim.Satellites = []Satellite{
 		{ID: 1, Elevation: 45, Azimuth: 90, SNR: 35},
 		{ID: 2, Elevation: 60, Azimuth: 180, SNR: 40},
 		{ID: 3, Elevation: 30, Azimuth: 270, SNR: 25},
@@ -1115,19 +1115,19 @@ func TestUpdateSatellitesEdgeCases(t *testing.T) {
 		snrChanges := 0
 
 		for i := 0; i < 10; i++ {
-			prevElev := sim.satellites[0].Elevation
-			prevAzim := sim.satellites[0].Azimuth
-			prevSNR := sim.satellites[0].SNR
+			prevElev := sim.Satellites[0].Elevation
+			prevAzim := sim.Satellites[0].Azimuth
+			prevSNR := sim.Satellites[0].SNR
 
 			sim.updateSatellites()
 
-			if sim.satellites[0].Elevation != prevElev {
+			if sim.Satellites[0].Elevation != prevElev {
 				elevationChanges++
 			}
-			if sim.satellites[0].Azimuth != prevAzim {
+			if sim.Satellites[0].Azimuth != prevAzim {
 				azimuthChanges++
 			}
-			if sim.satellites[0].SNR != prevSNR {
+			if sim.Satellites[0].SNR != prevSNR {
 				snrChanges++
 			}
 		}
@@ -1147,16 +1147,16 @@ func TestUpdateSatellitesEdgeCases(t *testing.T) {
 		}
 
 		// Set satellites to boundary values
-		sim.satellites[0].Elevation = 4  // Below minimum
-		sim.satellites[1].Elevation = 86 // Above maximum
-		sim.satellites[2].SNR = 14       // Below minimum
-		sim.satellites[3].SNR = 56       // Above maximum
+		sim.Satellites[0].Elevation = 4  // Below minimum
+		sim.Satellites[1].Elevation = 86 // Above maximum
+		sim.Satellites[2].SNR = 14       // Below minimum
+		sim.Satellites[3].SNR = 56       // Above maximum
 
 		// Update multiple times to ensure boundaries are maintained
 		for i := 0; i < 20; i++ {
 			sim.updateSatellites()
 
-			for j, sat := range sim.satellites {
+			for j, sat := range sim.Satellites {
 				if sat.Elevation < 5 || sat.Elevation > 85 {
 					t.Errorf("Satellite %d elevation %d out of bounds [5, 85]", j, sat.Elevation)
 				}
@@ -1789,7 +1789,7 @@ func TestDeterministicBoundaryConditions(t *testing.T) {
 		}
 
 		// Force a scenario where speed goes negative
-		sim.config.Speed = 1.0
+		sim.Config.Speed = 1.0
 		sim.currentSpeed = 1.0
 
 		// Manually set a large negative delta to force the boundary condition
@@ -1840,19 +1840,19 @@ func TestDeterministicBoundaryConditions(t *testing.T) {
 		}
 
 		// Force satellites to boundary conditions
-		for i := range sim.satellites {
+		for i := range sim.Satellites {
 			// Test low elevation boundary
-			sim.satellites[i].Elevation = 3 // Below minimum of 5
+			sim.Satellites[i].Elevation = 3 // Below minimum of 5
 			sim.updateSatellites()
-			if sim.satellites[i].Elevation < 5 {
-				t.Errorf("Satellite %d elevation should be at least 5, got %d", i, sim.satellites[i].Elevation)
+			if sim.Satellites[i].Elevation < 5 {
+				t.Errorf("Satellite %d elevation should be at least 5, got %d", i, sim.Satellites[i].Elevation)
 			}
 
 			// Test high elevation boundary
-			sim.satellites[i].Elevation = 87 // Above maximum of 85
+			sim.Satellites[i].Elevation = 87 // Above maximum of 85
 			sim.updateSatellites()
-			if sim.satellites[i].Elevation > 85 {
-				t.Errorf("Satellite %d elevation should be at most 85, got %d", i, sim.satellites[i].Elevation)
+			if sim.Satellites[i].Elevation > 85 {
+				t.Errorf("Satellite %d elevation should be at most 85, got %d", i, sim.Satellites[i].Elevation)
 			}
 		}
 	})
@@ -1866,19 +1866,19 @@ func TestDeterministicBoundaryConditions(t *testing.T) {
 		}
 
 		// Force satellites to SNR boundary conditions
-		for i := range sim.satellites {
+		for i := range sim.Satellites {
 			// Test low SNR boundary
-			sim.satellites[i].SNR = 10 // Below minimum of 15
+			sim.Satellites[i].SNR = 10 // Below minimum of 15
 			sim.updateSatellites()
-			if sim.satellites[i].SNR < 15 {
-				t.Errorf("Satellite %d SNR should be at least 15, got %d", i, sim.satellites[i].SNR)
+			if sim.Satellites[i].SNR < 15 {
+				t.Errorf("Satellite %d SNR should be at least 15, got %d", i, sim.Satellites[i].SNR)
 			}
 
 			// Test high SNR boundary
-			sim.satellites[i].SNR = 60 // Above maximum of 55
+			sim.Satellites[i].SNR = 60 // Above maximum of 55
 			sim.updateSatellites()
-			if sim.satellites[i].SNR > 55 {
-				t.Errorf("Satellite %d SNR should be at most 55, got %d", i, sim.satellites[i].SNR)
+			if sim.Satellites[i].SNR > 55 {
+				t.Errorf("Satellite %d SNR should be at most 55, got %d", i, sim.Satellites[i].SNR)
 			}
 		}
 	})
@@ -1901,7 +1901,7 @@ func TestDeterministicBoundaryConditions(t *testing.T) {
 		}
 
 		// Test minimum relative to starting altitude
-		sim.config.Altitude = 200.0 // High starting altitude
+		sim.Config.Altitude = 200.0 // High starting altitude
 		sim.currentAlt = 80.0       // Below (200 - 100) = 100m minimum
 		sim.updateAltitude()
 		if sim.currentAlt < 100.0 {
@@ -1916,7 +1916,7 @@ func TestDeterministicBoundaryConditions(t *testing.T) {
 		}
 
 		// Test the sea level boundary condition specifically
-		sim.config.Altitude = 10.0 // Low starting altitude
+		sim.Config.Altitude = 10.0 // Low starting altitude
 		sim.currentAlt = -60.0     // This should trigger the -50.0 sea level minimum
 		sim.updateAltitude()
 		if sim.currentAlt < -50.0 {
@@ -2562,16 +2562,16 @@ func TestReplaySpeedZeroDefensiveCheck(t *testing.T) {
 					t.Errorf("Expected warning for invalid replay speed %.3f, got: %s", tc.replaySpeed, output)
 				}
 				// Speed should have been corrected to 1.0
-				if sim.config.ReplaySpeed != 1.0 {
-					t.Errorf("Expected replay speed to be corrected to 1.0, got %.3f", sim.config.ReplaySpeed)
+				if sim.Config.ReplaySpeed != 1.0 {
+					t.Errorf("Expected replay speed to be corrected to 1.0, got %.3f", sim.Config.ReplaySpeed)
 				}
 			} else {
 				if strings.Contains(output, "Warning: Invalid replay speed") {
 					t.Errorf("Unexpected warning for valid replay speed %.3f: %s", tc.replaySpeed, output)
 				}
 				// Speed should remain unchanged
-				if sim.config.ReplaySpeed != tc.replaySpeed {
-					t.Errorf("Expected replay speed to remain %.3f, got %.3f", tc.replaySpeed, sim.config.ReplaySpeed)
+				if sim.Config.ReplaySpeed != tc.replaySpeed {
+					t.Errorf("Expected replay speed to remain %.3f, got %.3f", tc.replaySpeed, sim.Config.ReplaySpeed)
 				}
 			}
 

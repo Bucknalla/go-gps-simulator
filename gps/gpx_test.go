@@ -1,4 +1,4 @@
-package main
+package gps
 
 import (
 	"encoding/xml"

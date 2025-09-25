@@ -1,4 +1,4 @@
-package main
+package gps
 
 import (
 	"fmt"
@@ -43,7 +43,7 @@ func (s *GPSSimulator) generateGGA(timestamp time.Time) string {
 
 	// Quality indicator: 1 = GPS fix
 	quality := "1"
-	numSats := fmt.Sprintf("%02d", len(s.satellites))
+	numSats := fmt.Sprintf("%02d", len(s.Satellites))
 	hdop := "1.2"                                 // Horizontal dilution of precision
 	altitude := fmt.Sprintf("%.1f", s.currentAlt) // Current altitude above mean sea level
 	altUnit := "M"
@@ -125,7 +125,7 @@ func (s *GPSSimulator) generateGSA() string {
 
 	// List up to 12 satellite IDs being used for fix
 	var satIDs []string
-	for i, sat := range s.satellites {
+	for i, sat := range s.Satellites {
 		if i < 12 {
 			satIDs = append(satIDs, fmt.Sprintf("%02d", sat.ID))
 		}
@@ -152,7 +152,7 @@ func (s *GPSSimulator) generateGSA() string {
 func (s *GPSSimulator) generateGSV() []string {
 	var sentences []string
 
-	totalSats := len(s.satellites)
+	totalSats := len(s.Satellites)
 	totalSentences := (totalSats + 3) / 4 // Round up to nearest 4
 
 	for sentenceNum := 1; sentenceNum <= totalSentences; sentenceNum++ {
@@ -167,7 +167,7 @@ func (s *GPSSimulator) generateGSV() []string {
 
 		// Add satellite data (up to 4 satellites per sentence)
 		for i := startIdx; i < endIdx; i++ {
-			sat := s.satellites[i]
+			sat := s.Satellites[i]
 			sentence += fmt.Sprintf(",%02d,%02d,%03d,%02d",
 				sat.ID, sat.Elevation, sat.Azimuth, sat.SNR)
 		}
