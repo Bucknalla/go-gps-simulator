@@ -1,4 +1,4 @@
-module go-gps-simulator
+module github.com/Bucknalla/go-gps-simulator
 
 go 1.23
 

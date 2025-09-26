@@ -1,4 +1,4 @@
-package main
+package gps
 
 import (
 	"fmt"
@@ -9,8 +9,32 @@ import (
 	"time"
 )
 
+// Config represents the configuration for the GPS simulator
+type Config struct {
+	Latitude       float64
+	Longitude      float64
+	Radius         float64       // in meters
+	Altitude       float64       // starting altitude in meters
+	Jitter         float64       // GPS jitter factor (0.0-1.0)
+	AltitudeJitter float64       // altitude jitter factor (0.0-1.0)
+	Speed          float64       // static speed in knots
+	Course         float64       // static course in degrees (0-359)
+	Satellites     int
+	TimeToLock     time.Duration
+	OutputRate     time.Duration
+	SerialPort     string        // Serial port device (e.g., /dev/ttyUSB0, COM1)
+	BaudRate       int           // Serial baud rate
+	Quiet          bool          // Suppress informational messages
+	GPXEnabled     bool          // Enable GPX file generation with timestamp filename
+	GPXFile        string        // Generated GPX filename (internal use)
+	Duration       time.Duration // How long to run the simulation (0 = run indefinitely)
+	ReplayFile     string        // GPX file to replay (empty = normal simulation mode)
+	ReplaySpeed    float64       // Replay speed multiplier (1.0 = real-time, 2.0 = 2x speed, etc.)
+	ReplayLoop     bool          // Whether to loop the replay (false = stop after one pass, true = loop continuously)
+}
+
 type GPSSimulator struct {
-	config         Config
+	Config         Config
 	currentLat     float64
 	currentLon     float64
 	currentAlt     float64
@@ -20,7 +44,7 @@ type GPSSimulator struct {
 	lockTime       time.Time
 	startTime      time.Time
 	lastUpdateTime time.Time
-	satellites     []Satellite
+	Satellites     []Satellite
 	nmeaWriter     io.Writer
 	gpxWriter      *GPXWriter
 	// Replay mode fields
@@ -40,7 +64,7 @@ type Satellite struct {
 func NewGPSSimulator(config Config, nmeaWriter io.Writer) (*GPSSimulator, error) {
 	now := time.Now()
 	sim := &GPSSimulator{
-		config:          config,
+		Config:          config,
 		currentLat:      config.Latitude,
 		currentLon:      config.Longitude,
 		currentAlt:      config.Altitude,
@@ -88,10 +112,10 @@ func NewGPSSimulator(config Config, nmeaWriter io.Writer) (*GPSSimulator, error)
 }
 
 func (s *GPSSimulator) initializeSatellites() {
-	s.satellites = make([]Satellite, s.config.Satellites)
+	s.Satellites = make([]Satellite, s.Config.Satellites)
 
-	for i := 0; i < s.config.Satellites; i++ {
-		s.satellites[i] = Satellite{
+	for i := 0; i < s.Config.Satellites; i++ {
+		s.Satellites[i] = Satellite{
 			ID:        i + 1,
 			Elevation: rand.Intn(70) + 10, // 10-80 degrees
 			Azimuth:   rand.Intn(360),     // 0-359 degrees
@@ -101,7 +125,7 @@ func (s *GPSSimulator) initializeSatellites() {
 }
 
 func (s *GPSSimulator) Run() {
-	ticker := time.NewTicker(s.config.OutputRate)
+	ticker := time.NewTicker(s.Config.OutputRate)
 	defer ticker.Stop()
 
 	// Ensure GPX writer is closed when simulation ends
@@ -110,13 +134,13 @@ func (s *GPSSimulator) Run() {
 	// Set up duration timer if specified
 	var durationTimer *time.Timer
 	var durationChan <-chan time.Time
-	if s.config.Duration > 0 {
-		durationTimer = time.NewTimer(s.config.Duration)
+	if s.Config.Duration > 0 {
+		durationTimer = time.NewTimer(s.Config.Duration)
 		durationChan = durationTimer.C
 		defer durationTimer.Stop()
 
-		if !s.config.Quiet {
-			fmt.Fprintf(os.Stderr, "Simulation will run for %v\n", s.config.Duration)
+		if !s.Config.Quiet {
+			fmt.Fprintf(os.Stderr, "Simulation will run for %v\n", s.Config.Duration)
 		}
 	}
 
@@ -128,15 +152,15 @@ func (s *GPSSimulator) Run() {
 			s.updateGPX()
 
 			// Check if replay is completed and looping is disabled
-			if s.config.ReplayFile != "" && !s.config.ReplayLoop && s.replayCompleted {
-				if !s.config.Quiet {
+			if s.Config.ReplayFile != "" && !s.Config.ReplayLoop && s.replayCompleted {
+				if !s.Config.Quiet {
 					fmt.Fprintf(os.Stderr, "\nGPX replay completed\n")
 				}
 				return
 			}
 		case <-durationChan:
-			if !s.config.Quiet {
-				fmt.Fprintf(os.Stderr, "\nSimulation completed after %v\n", s.config.Duration)
+			if !s.Config.Quiet {
+				fmt.Fprintf(os.Stderr, "\nSimulation completed after %v\n", s.Config.Duration)
 			}
 			return
 		}
@@ -146,9 +170,9 @@ func (s *GPSSimulator) Run() {
 // Close closes any open resources (like GPX writer)
 func (s *GPSSimulator) Close() {
 	if s.gpxWriter != nil {
-		if !s.config.Quiet {
+		if !s.Config.Quiet {
 			fmt.Fprintf(os.Stderr, "Writing GPX file: %s with %d track points\n",
-				s.config.GPXFile, s.gpxWriter.GetTrackPointCount())
+				s.Config.GPXFile, s.gpxWriter.GetTrackPointCount())
 		}
 		err := s.gpxWriter.Close()
 		if err != nil {
@@ -179,14 +203,14 @@ func (s *GPSSimulator) update() {
 	// Check if GPS should be locked
 	if !s.isLocked && now.After(s.lockTime) {
 		s.isLocked = true
-		if !s.config.Quiet {
+		if !s.Config.Quiet {
 			fmt.Fprintf(os.Stderr, "GPS LOCKED after %v\n", now.Sub(s.startTime))
 		}
 	}
 
 	// Update position if locked
 	if s.isLocked {
-		if s.config.ReplayFile != "" {
+		if s.Config.ReplayFile != "" {
 			s.updateReplayPosition()
 		} else {
 			s.updateSpeedAndCourse()
@@ -203,34 +227,34 @@ func (s *GPSSimulator) updateSpeedAndCourse() {
 	// Apply jitter to speed and course based on jitter configuration
 	var speedVariation, courseVariation float64
 
-	if s.config.Jitter == 0.0 {
+	if s.Config.Jitter == 0.0 {
 		// Zero jitter: no variation at all
 		speedVariation = 0.0
 		courseVariation = 0.0
-	} else if s.config.Jitter < 0.2 {
+	} else if s.Config.Jitter < 0.2 {
 		// Low jitter: minimal variation (±5% speed, ±2° course)
 		speedVariation = 0.05
 		courseVariation = 2.0
-	} else if s.config.Jitter < 0.7 {
+	} else if s.Config.Jitter < 0.7 {
 		// Medium jitter: moderate variation (±10-30% speed, ±5-15° course)
-		speedVariation = 0.10 + (s.config.Jitter-0.2)*0.40 // 10% to 30%
-		courseVariation = 5.0 + (s.config.Jitter-0.2)*20.0 // 5° to 15°
+		speedVariation = 0.10 + (s.Config.Jitter-0.2)*0.40 // 10% to 30%
+		courseVariation = 5.0 + (s.Config.Jitter-0.2)*20.0 // 5° to 15°
 	} else {
 		// High jitter: large variation (±50% speed, ±30° course)
-		speedVariation = 0.30 + (s.config.Jitter-0.7)*0.67  // 30% to 50%
-		courseVariation = 15.0 + (s.config.Jitter-0.7)*50.0 // 15° to 30°
+		speedVariation = 0.30 + (s.Config.Jitter-0.7)*0.67  // 30% to 50%
+		courseVariation = 15.0 + (s.Config.Jitter-0.7)*50.0 // 15° to 30°
 	}
 
 	// Apply speed variation
-	speedDelta := (rand.Float64() - 0.5) * 2 * s.config.Speed * speedVariation
-	s.currentSpeed = s.config.Speed + speedDelta
+	speedDelta := (rand.Float64() - 0.5) * 2 * s.Config.Speed * speedVariation
+	s.currentSpeed = s.Config.Speed + speedDelta
 	if s.currentSpeed < 0 {
 		s.currentSpeed = 0 // Speed cannot be negative
 	}
 
 	// Apply course variation
 	courseDelta := (rand.Float64() - 0.5) * 2 * courseVariation
-	s.currentCourse = s.config.Course + courseDelta
+	s.currentCourse = s.Config.Course + courseDelta
 
 	// Normalize course to 0-359.9 range
 	for s.currentCourse < 0 {
@@ -280,8 +304,8 @@ func (s *GPSSimulator) updatePosition() {
 
 	// Apply radius constraint - if we're moving outside the configured radius,
 	// either constrain the movement or apply some random jitter to change direction
-	if s.distanceFromCenter(newLat, newLon) > s.config.Radius {
-		if s.config.Jitter > 0.5 {
+	if s.distanceFromCenter(newLat, newLon) > s.Config.Radius {
+		if s.Config.Jitter > 0.5 {
 			// High jitter: add some randomness to course to "bounce" off boundaries
 			randomCourseChange := (rand.Float64() - 0.5) * 60.0 // ±30° change
 			s.currentCourse += randomCourseChange
@@ -306,8 +330,8 @@ func (s *GPSSimulator) updatePosition() {
 		} else {
 			// Low jitter: constrain to radius boundary
 			// Calculate direction from center to new position
-			centerLat := s.config.Latitude
-			centerLon := s.config.Longitude
+			centerLat := s.Config.Latitude
+			centerLon := s.Config.Longitude
 
 			bearing := math.Atan2(
 				(newLon-centerLon)*math.Cos(centerLat*math.Pi/180.0),
@@ -315,8 +339,8 @@ func (s *GPSSimulator) updatePosition() {
 			)
 
 			// Place new position at radius boundary in that direction
-			radiusDegLat := s.config.Radius / 111320.0
-			radiusDegLon := s.config.Radius / (111320.0 * math.Cos(centerLat*math.Pi/180.0))
+			radiusDegLat := s.Config.Radius / 111320.0
+			radiusDegLon := s.Config.Radius / (111320.0 * math.Cos(centerLat*math.Pi/180.0))
 
 			newLat = centerLat + radiusDegLat*math.Cos(bearing)
 			newLon = centerLon + radiusDegLon*math.Sin(bearing)/math.Cos(centerLat*math.Pi/180.0)
@@ -330,10 +354,10 @@ func (s *GPSSimulator) updatePosition() {
 
 func (s *GPSSimulator) updateAltitude() {
 	// Apply altitude jitter based on configuration
-	if s.config.AltitudeJitter > 0 {
+	if s.Config.AltitudeJitter > 0 {
 		// Calculate maximum altitude change per update
 		// Low jitter = small changes; High jitter = large changes
-		maxChange := 1.0 + (s.config.AltitudeJitter * 20.0) // 1-21 meters max change
+		maxChange := 1.0 + (s.Config.AltitudeJitter * 20.0) // 1-21 meters max change
 
 		// Generate random altitude change
 		change := (rand.Float64() - 0.5) * 2 * maxChange // -maxChange to +maxChange
@@ -342,8 +366,8 @@ func (s *GPSSimulator) updateAltitude() {
 		newAltitude := s.currentAlt + change
 
 		// Keep altitude within reasonable bounds (prevent negative or extreme altitudes)
-		minAltitude := s.config.Altitude - 100.0 // Allow 100m below starting altitude
-		maxAltitude := s.config.Altitude + 500.0 // Allow 500m above starting altitude
+		minAltitude := s.Config.Altitude - 100.0 // Allow 100m below starting altitude
+		maxAltitude := s.Config.Altitude + 500.0 // Allow 500m above starting altitude
 
 		if minAltitude < -50.0 {
 			minAltitude = -50.0 // Don't go too far below sea level
@@ -360,7 +384,7 @@ func (s *GPSSimulator) updateAltitude() {
 }
 
 func (s *GPSSimulator) distanceFromCenter(lat, lon float64) float64 {
-	return s.calculateDistance(s.config.Latitude, s.config.Longitude, lat, lon)
+	return s.calculateDistance(s.Config.Latitude, s.Config.Longitude, lat, lon)
 }
 
 // hasSequentialTimestamps checks if the replay points have sequential timestamps
@@ -380,26 +404,26 @@ func (s *GPSSimulator) hasSequentialTimestamps() bool {
 
 func (s *GPSSimulator) updateSatellites() {
 	// Simulate satellite movement and signal changes
-	for i := range s.satellites {
+	for i := range s.Satellites {
 		// Slightly adjust elevation and azimuth
-		s.satellites[i].Elevation += rand.Intn(3) - 1 // -1, 0, or 1
-		s.satellites[i].Azimuth = (s.satellites[i].Azimuth + rand.Intn(3) - 1 + 360) % 360
+		s.Satellites[i].Elevation += rand.Intn(3) - 1 // -1, 0, or 1
+		s.Satellites[i].Azimuth = (s.Satellites[i].Azimuth + rand.Intn(3) - 1 + 360) % 360
 
 		// Keep elevation within bounds
-		if s.satellites[i].Elevation < 5 {
-			s.satellites[i].Elevation = 5
+		if s.Satellites[i].Elevation < 5 {
+			s.Satellites[i].Elevation = 5
 		}
-		if s.satellites[i].Elevation > 85 {
-			s.satellites[i].Elevation = 85
+		if s.Satellites[i].Elevation > 85 {
+			s.Satellites[i].Elevation = 85
 		}
 
 		// Simulate SNR variations
-		s.satellites[i].SNR += rand.Intn(6) - 3 // -3 to +3
-		if s.satellites[i].SNR < 15 {
-			s.satellites[i].SNR = 15
+		s.Satellites[i].SNR += rand.Intn(6) - 3 // -3 to +3
+		if s.Satellites[i].SNR < 15 {
+			s.Satellites[i].SNR = 15
 		}
-		if s.satellites[i].SNR > 55 {
-			s.satellites[i].SNR = 55
+		if s.Satellites[i].SNR > 55 {
+			s.Satellites[i].SNR = 55
 		}
 	}
 }
@@ -449,17 +473,17 @@ func (s *GPSSimulator) updateReplayPosition() {
 	}
 
 	// Defensive check for invalid replay speed
-	if s.config.ReplaySpeed <= 0 {
+	if s.Config.ReplaySpeed <= 0 {
 		// Log error and use default speed to prevent panic
-		fmt.Fprintf(os.Stderr, "Warning: Invalid replay speed %.2f, using default 1.0x\n", s.config.ReplaySpeed)
-		s.config.ReplaySpeed = 1.0
+		fmt.Fprintf(os.Stderr, "Warning: Invalid replay speed %.2f, using default 1.0x\n", s.Config.ReplaySpeed)
+		s.Config.ReplaySpeed = 1.0
 	}
 
 	now := time.Now()
 	elapsedTime := now.Sub(s.replayStartTime)
 
 	// Apply replay speed multiplier
-	adjustedTime := time.Duration(float64(elapsedTime) * s.config.ReplaySpeed)
+	adjustedTime := time.Duration(float64(elapsedTime) * s.Config.ReplaySpeed)
 
 	// Check if timestamps are sequential for time-based progression
 	useTimestamps := s.hasSequentialTimestamps()
@@ -487,10 +511,10 @@ func (s *GPSSimulator) updateReplayPosition() {
 	} else {
 		// Index-based progression when timestamps are not sequential
 		// Progress through points at a steady rate (1 point per second at 1x speed)
-		pointInterval := time.Duration(float64(time.Second) / s.config.ReplaySpeed)
+		pointInterval := time.Duration(float64(time.Second) / s.Config.ReplaySpeed)
 		pointsSinceStart := int(elapsedTime / pointInterval)
 
-		if s.config.ReplayLoop {
+		if s.Config.ReplayLoop {
 			s.replayIndex = pointsSinceStart % len(s.replayPoints)
 		} else {
 			s.replayIndex = pointsSinceStart
@@ -500,7 +524,7 @@ func (s *GPSSimulator) updateReplayPosition() {
 	// If we've reached the end, handle completion/looping
 	if s.replayIndex >= len(s.replayPoints) {
 		s.replayCompleted = true
-		if s.config.ReplayLoop {
+		if s.Config.ReplayLoop {
 			// Loop back to start if looping is enabled
 			s.replayIndex = 0
 			s.replayStartTime = now
