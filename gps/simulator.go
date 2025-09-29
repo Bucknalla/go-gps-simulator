@@ -292,6 +292,22 @@ func (s *GPSSimulator) updatePosition() {
 	deltaEast := distanceMeters * math.Cos(mathAngleRad)  // Eastward displacement
 	deltaNorth := distanceMeters * math.Sin(mathAngleRad) // Northward displacement
 
+	// Apply GPS jitter noise within the radius constraint
+	// GPS receivers have noise even when stationary due to satellite signal variations
+	if s.Config.Jitter > 0 {
+		// Calculate maximum jitter distance as a fraction of radius
+		// Low jitter: up to 10% of radius, High jitter: up to 50% of radius
+		maxJitterDistance := s.Config.Radius * s.Config.Jitter * 0.5
+
+		// Generate random jitter in meters
+		jitterAngle := rand.Float64() * 2 * math.Pi // Random direction
+		jitterDistance := rand.Float64() * maxJitterDistance // Random distance within max
+
+		// Add jitter to movement
+		deltaEast += jitterDistance * math.Cos(jitterAngle)
+		deltaNorth += jitterDistance * math.Sin(jitterAngle)
+	}
+
 	// Convert meters to degrees (approximate)
 	// At the equator: 1 degree latitude ≈ 111,320 meters
 	// 1 degree longitude varies by latitude: ≈ 111,320 * cos(latitude) meters
@@ -302,12 +318,29 @@ func (s *GPSSimulator) updatePosition() {
 	newLat := s.currentLat + deltaLatDeg
 	newLon := s.currentLon + deltaLonDeg
 
-	// Apply radius constraint - if we're moving outside the configured radius,
-	// either constrain the movement or apply some random jitter to change direction
-	if s.distanceFromCenter(newLat, newLon) > s.Config.Radius {
-		if s.Config.Jitter > 0.5 {
-			// High jitter: add some randomness to course to "bounce" off boundaries
-			randomCourseChange := (rand.Float64() - 0.5) * 60.0 // ±30° change
+	// Always enforce radius constraint - clamp position to stay within radius
+	distanceFromCenter := s.distanceFromCenter(newLat, newLon)
+	if distanceFromCenter > s.Config.Radius {
+		// Calculate direction from center to new position
+		centerLat := s.Config.Latitude
+		centerLon := s.Config.Longitude
+
+		bearing := math.Atan2(
+			(newLon-centerLon)*math.Cos(centerLat*math.Pi/180.0),
+			newLat-centerLat,
+		)
+
+		// Place new position at radius boundary in that direction
+		radiusDegLat := s.Config.Radius / 111320.0
+		radiusDegLon := s.Config.Radius / (111320.0 * math.Cos(centerLat*math.Pi/180.0))
+
+		newLat = centerLat + radiusDegLat*math.Cos(bearing)
+		newLon = centerLon + radiusDegLon*math.Sin(bearing)/math.Cos(centerLat*math.Pi/180.0)
+
+		// Reverse direction to bounce off the boundary for next update
+		if s.Config.Jitter > 0.3 {
+			// Add random course change when hitting boundary
+			randomCourseChange := (rand.Float64() - 0.5) * 90.0 // ±45° change
 			s.currentCourse += randomCourseChange
 
 			// Normalize course
@@ -317,33 +350,6 @@ func (s *GPSSimulator) updatePosition() {
 			for s.currentCourse >= 360 {
 				s.currentCourse -= 360
 			}
-
-			// Recalculate with new course
-			mathAngleRad = (90.0 - s.currentCourse) * math.Pi / 180.0
-			deltaEast = distanceMeters * math.Cos(mathAngleRad)
-			deltaNorth = distanceMeters * math.Sin(mathAngleRad)
-			deltaLatDeg = deltaNorth / 111320.0
-			deltaLonDeg = deltaEast / (111320.0 * math.Cos(s.currentLat*math.Pi/180.0))
-
-			newLat = s.currentLat + deltaLatDeg
-			newLon = s.currentLon + deltaLonDeg
-		} else {
-			// Low jitter: constrain to radius boundary
-			// Calculate direction from center to new position
-			centerLat := s.Config.Latitude
-			centerLon := s.Config.Longitude
-
-			bearing := math.Atan2(
-				(newLon-centerLon)*math.Cos(centerLat*math.Pi/180.0),
-				newLat-centerLat,
-			)
-
-			// Place new position at radius boundary in that direction
-			radiusDegLat := s.Config.Radius / 111320.0
-			radiusDegLon := s.Config.Radius / (111320.0 * math.Cos(centerLat*math.Pi/180.0))
-
-			newLat = centerLat + radiusDegLat*math.Cos(bearing)
-			newLon = centerLon + radiusDegLon*math.Sin(bearing)/math.Cos(centerLat*math.Pi/180.0)
 		}
 	}
 
