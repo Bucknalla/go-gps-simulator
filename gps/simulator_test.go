@@ -1578,11 +1578,12 @@ func TestUpdatePositionEdgeCasesAdvanced(t *testing.T) {
 		lonChange := math.Abs(sim.currentLon - initialLon)
 		totalChange := math.Sqrt(latChange*latChange + lonChange*lonChange)
 
-		// With zero radius, movement should still occur if speed > 0
-		// This tests the boundary logic when radius is zero
+		// With zero radius (no constraint), movement should occur based on speed
+		// Zero radius should mean "no radius constraint", not "pin to origin"
 		if totalChange < 0.00001 {
-			// This might actually be expected behavior - zero radius might constrain movement
-			t.Logf("Position change was minimal (%.8f) with zero radius - this may be correct behavior", totalChange)
+			t.Errorf("Position should change with zero radius and non-zero speed. Total change: %.8f", totalChange)
+		} else {
+			t.Logf("Position changed correctly (%.8f) with zero radius - no constraint applied", totalChange)
 		}
 	})
 
@@ -1992,6 +1993,50 @@ func TestDeterministicBoundaryConditions(t *testing.T) {
 		if !positionChanged {
 			t.Error("Stationary GPS should show position jitter with non-zero jitter setting")
 		}
+	})
+
+	t.Run("Radius zero means no constraint", func(t *testing.T) {
+		config := createTestConfig()
+		config.Radius = 0.0   // Zero radius should disable constraint
+		config.Speed = 20.0   // Reasonable speed
+		config.Course = 90.0  // Due east
+		config.Jitter = 0.0   // No jitter to make movement predictable
+		buffer := &bytes.Buffer{}
+		sim, err := NewGPSSimulator(config, buffer)
+		if err != nil {
+			t.Fatalf("Failed to create GPS simulator: %v", err)
+		}
+		sim.isLocked = true
+
+		// Record initial position
+		initialLat := sim.currentLat
+		initialLon := sim.currentLon
+
+		// Move for several updates - should keep moving without constraint
+		for i := 0; i < 5; i++ {
+			time.Sleep(100 * time.Millisecond) // Ensure deltaTime > 0
+			sim.updatePosition()
+		}
+
+		// Calculate total distance moved from origin
+		finalDistance := sim.distanceFromCenter(sim.currentLat, sim.currentLon)
+		latChange := math.Abs(sim.currentLat - initialLat)
+		lonChange := math.Abs(sim.currentLon - initialLon)
+
+		// Should have moved eastward with no radius constraint
+		if latChange > 0.0001 { // Should not move much in latitude (going due east)
+			t.Errorf("Expected minimal latitude change going due east. Lat change: %.6f", latChange)
+		}
+
+		if lonChange < 0.00001 { // Should move in longitude (eastward)
+			t.Errorf("Expected eastward movement with zero radius. Lon change: %.6f", lonChange)
+		}
+
+		if finalDistance < 1.0 { // Should be some distance from origin after 5 updates
+			t.Errorf("Expected movement from origin with zero radius. Distance: %.2f meters", finalDistance)
+		}
+
+		t.Logf("Successfully moved %.2f meters from origin with zero radius constraint", finalDistance)
 	})
 }
 

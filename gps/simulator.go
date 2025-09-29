@@ -295,9 +295,16 @@ func (s *GPSSimulator) updatePosition() {
 	// Apply GPS jitter noise within the radius constraint
 	// GPS receivers have noise even when stationary due to satellite signal variations
 	if s.Config.Jitter > 0 {
-		// Calculate maximum jitter distance as a fraction of radius
-		// Low jitter: up to 10% of radius, High jitter: up to 50% of radius
-		maxJitterDistance := s.Config.Radius * s.Config.Jitter * 0.5
+		var maxJitterDistance float64
+		if s.Config.Radius > 0 {
+			// Calculate maximum jitter distance as a fraction of radius
+			// Low jitter: up to 10% of radius, High jitter: up to 50% of radius
+			maxJitterDistance = s.Config.Radius * s.Config.Jitter * 0.5
+		} else {
+			// When radius is 0 (no constraint), use a reasonable default jitter range
+			// Base it on typical GPS accuracy: ~10m max jitter at high jitter settings
+			maxJitterDistance = 10.0 * s.Config.Jitter
+		}
 
 		// Generate random jitter in meters
 		jitterAngle := rand.Float64() * 2 * math.Pi // Random direction
@@ -318,9 +325,10 @@ func (s *GPSSimulator) updatePosition() {
 	newLat := s.currentLat + deltaLatDeg
 	newLon := s.currentLon + deltaLonDeg
 
-	// Always enforce radius constraint - clamp position to stay within radius
-	distanceFromCenter := s.distanceFromCenter(newLat, newLon)
-	if distanceFromCenter > s.Config.Radius {
+	// Enforce radius constraint only if radius > 0 (radius = 0 means no constraint)
+	if s.Config.Radius > 0 {
+		distanceFromCenter := s.distanceFromCenter(newLat, newLon)
+		if distanceFromCenter > s.Config.Radius {
 		// Calculate direction from center to new position
 		centerLat := s.Config.Latitude
 		centerLon := s.Config.Longitude
@@ -350,6 +358,7 @@ func (s *GPSSimulator) updatePosition() {
 			for s.currentCourse >= 360 {
 				s.currentCourse -= 360
 			}
+		}
 		}
 	}
 
