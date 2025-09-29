@@ -2,9 +2,14 @@ module go-gps-simulator
 
 go 1.23
 
-require go.bug.st/serial v1.6.4
+require (
+	github.com/Bucknalla/go-gps-simulator/gps v0.0.0
+	go.bug.st/serial v1.6.4
+)
 
 require (
 	github.com/creack/goselect v0.1.2 // indirect
 	golang.org/x/sys v0.19.0 // indirect
 )
+
+replace github.com/Bucknalla/go-gps-simulator/gps => ./gps

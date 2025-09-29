@@ -1,11 +1,12 @@
 package main
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Bucknalla/go-gps-simulator/gps"
 )
 
 // Test Config struct
@@ -218,20 +219,20 @@ func TestConfigValidation(t *testing.T) {
 func TestMainWorkflow(t *testing.T) {
 	// Simulate the main function workflow
 	config := Config{
-		Latitude:   37.7749,
-		Longitude:  -122.4194,
-		Radius:     100.0,
-		Jitter:     0.5,
-		Satellites: 8,
-		TimeToLock: 30 * time.Second,
-		OutputRate: 1 * time.Second,
-		BaudRate:   9600,
-		Quiet:      false, // Test with verbose mode
+		Latitude:    37.7749,
+		Longitude:   -122.4194,
+		Radius:      100.0,
+		Jitter:      0.5,
+		Satellites:  8,
+		TimeToLock:  30 * time.Second,
+		OutputRate:  1 * time.Second,
+		BaudRate:    9600,
+		ReplaySpeed: 1.0,
+		Quiet:       false, // Test with verbose mode
 	}
 
 	// Test that we can create a simulator (what main does)
-	nmeaWriter := os.Stdout // This is what main uses when no serial port is specified
-	simulator, err := NewGPSSimulator(config, nmeaWriter)
+	simulator, err := gps.NewSimulator(config)
 	if err != nil {
 		t.Fatalf("Failed to create GPS simulator: %v", err)
 	}
@@ -242,13 +243,14 @@ func TestMainWorkflow(t *testing.T) {
 
 	// Test that the simulator is properly configured
 	if simulator != nil {
-		if simulator.config.Latitude != config.Latitude {
+		status := simulator.GetStatus()
+		if status.Config.Latitude != config.Latitude {
 			t.Error("Simulator should be configured with the same latitude as config")
 		}
-		if simulator.config.Longitude != config.Longitude {
+		if status.Config.Longitude != config.Longitude {
 			t.Error("Simulator should be configured with the same longitude as config")
 		}
-		if len(simulator.satellites) != config.Satellites {
+		if len(status.Position.Satellites) != config.Satellites {
 			t.Error("Simulator should have the correct number of satellites")
 		}
 	}
@@ -267,15 +269,16 @@ func TestQuietFlag(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := Config{
-				Latitude:   37.7749,
-				Longitude:  -122.4194,
-				Radius:     100.0,
-				Jitter:     0.5,
-				Satellites: 8,
-				TimeToLock: 30 * time.Second,
-				OutputRate: 1 * time.Second,
-				BaudRate:   9600,
-				Quiet:      tt.quiet,
+				Latitude:    37.7749,
+				Longitude:   -122.4194,
+				Radius:      100.0,
+				Jitter:      0.5,
+				Satellites:  8,
+				TimeToLock:  30 * time.Second,
+				OutputRate:  1 * time.Second,
+				BaudRate:    9600,
+				ReplaySpeed: 1.0,
+				Quiet:       tt.quiet,
 			}
 
 			// Test that the quiet flag is properly set
@@ -284,7 +287,7 @@ func TestQuietFlag(t *testing.T) {
 			}
 
 			// Test that we can create a simulator with quiet mode
-			simulator, err := NewGPSSimulator(config, os.Stdout)
+			simulator, err := gps.NewSimulator(config)
 			if err != nil {
 				t.Fatalf("Failed to create GPS simulator: %v", err)
 			}
@@ -293,9 +296,12 @@ func TestQuietFlag(t *testing.T) {
 			}
 
 			// Verify the quiet setting is preserved in the simulator's config
-			if simulator != nil && simulator.config.Quiet != tt.quiet {
-				t.Errorf("Expected simulator config.Quiet to be %t, got %t",
-					tt.quiet, simulator.config.Quiet)
+			if simulator != nil {
+				status := simulator.GetStatus()
+				if status.Config.Quiet != tt.quiet {
+					t.Errorf("Expected simulator config.Quiet to be %t, got %t",
+						tt.quiet, status.Config.Quiet)
+				}
 			}
 		})
 	}
@@ -353,6 +359,7 @@ func TestMainFunctionComponents(t *testing.T) {
 		OutputRate:     1 * time.Second,
 		SerialPort:     "/dev/ttyUSB0",
 		BaudRate:       9600,
+		ReplaySpeed:    1.0,
 		Quiet:          false,
 		GPXEnabled:     true,
 		GPXFile:        filepath.Join(tempDir, "test_main.gpx"),
@@ -370,8 +377,7 @@ func TestMainFunctionComponents(t *testing.T) {
 	}
 
 	// Test simulator creation (simulates main's simulator creation)
-	nmeaWriter := os.Stdout
-	simulator, err := NewGPSSimulator(config, nmeaWriter)
+	simulator, err := gps.NewSimulator(config)
 	if err != nil {
 		t.Fatalf("Failed to create GPS simulator: %v", err)
 	}
@@ -381,15 +387,16 @@ func TestMainFunctionComponents(t *testing.T) {
 	}
 
 	// Test that simulator has correct config
-	if simulator.config.Latitude != config.Latitude {
+	status := simulator.GetStatus()
+	if status.Config.Latitude != config.Latitude {
 		t.Error("Simulator should have correct latitude")
 	}
-	if simulator.config.GPXEnabled != config.GPXEnabled {
+	if status.Config.GPXEnabled != config.GPXEnabled {
 		t.Error("Simulator should have correct GPX settings")
 	}
 
 	// Clean up
-	simulator.Close()
+	simulator.Stop()
 
 }
 
@@ -443,43 +450,47 @@ func TestConfigFieldAccess(t *testing.T) {
 func TestQuietModeIntegration(t *testing.T) {
 	// Test with quiet mode enabled
 	quietConfig := Config{
-		Latitude:   37.7749,
-		Longitude:  -122.4194,
-		Radius:     100.0,
-		Jitter:     0.5,
-		Satellites: 8,
-		TimeToLock: 10 * time.Millisecond, // Short for testing
-		OutputRate: 1 * time.Second,
-		BaudRate:   9600,
-		Quiet:      true,
+		Latitude:    37.7749,
+		Longitude:   -122.4194,
+		Radius:      100.0,
+		Jitter:      0.5,
+		Satellites:  8,
+		TimeToLock:  10 * time.Millisecond, // Short for testing
+		OutputRate:  1 * time.Second,
+		BaudRate:    9600,
+		ReplaySpeed: 1.0,
+		Quiet:       true,
 	}
 
-	quietSim, err := NewGPSSimulator(quietConfig, os.Stdout)
+	quietSim, err := gps.NewSimulator(quietConfig)
 	if err != nil {
 		t.Fatalf("Failed to create GPS simulator: %v", err)
 	}
-	if !quietSim.config.Quiet {
+	quietStatus := quietSim.GetStatus()
+	if !quietStatus.Config.Quiet {
 		t.Error("Simulator should preserve quiet mode setting")
 	}
 
 	// Test with quiet mode disabled
 	verboseConfig := Config{
-		Latitude:   37.7749,
-		Longitude:  -122.4194,
-		Radius:     100.0,
-		Jitter:     0.5,
-		Satellites: 8,
-		TimeToLock: 10 * time.Millisecond, // Short for testing
-		OutputRate: 1 * time.Second,
-		BaudRate:   9600,
-		Quiet:      false,
+		Latitude:    37.7749,
+		Longitude:   -122.4194,
+		Radius:      100.0,
+		Jitter:      0.5,
+		Satellites:  8,
+		TimeToLock:  10 * time.Millisecond, // Short for testing
+		OutputRate:  1 * time.Second,
+		BaudRate:    9600,
+		ReplaySpeed: 1.0,
+		Quiet:       false,
 	}
 
-	verboseSim, err := NewGPSSimulator(verboseConfig, os.Stdout)
+	verboseSim, err := gps.NewSimulator(verboseConfig)
 	if err != nil {
 		t.Fatalf("Failed to create GPS simulator: %v", err)
 	}
-	if verboseSim.config.Quiet {
+	verboseStatus := verboseSim.GetStatus()
+	if verboseStatus.Config.Quiet {
 		t.Error("Simulator should preserve non-quiet mode setting")
 	}
 }
