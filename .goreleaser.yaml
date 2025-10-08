@@ -8,6 +8,7 @@ before:
 builds:
   -
     id: "gps-simulator-linux"
+    main: ./cmd/gps-simulator
     binary: gps-simulator
     env:
       - CGO_ENABLED=0
@@ -25,6 +26,7 @@ builds:
 
   -
     id: "gps-simulator"
+    main: ./cmd/gps-simulator
     binary: gps-simulator
     env:
       - CGO_ENABLED=1
